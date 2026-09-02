@@ -67,3 +67,53 @@ ipcMain.handle('save-notes', async (_e, p, data) => {
   await fs.rename(target + '.tmp', target);
   return true;
 });
+
+// ---- folder / file-tree (the "open a vault" side of the app) ----
+
+ipcMain.handle('open-folder', async () => {
+  const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+  if (res.canceled || !res.filePaths[0]) return null;
+  return res.filePaths[0];
+});
+
+ipcMain.handle('read-dir', async (_e, dir) => {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    return entries
+      .filter(e => !e.name.startsWith('.'))
+      .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
+      .sort((a, b) => a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name));
+  } catch { return []; }
+});
+
+ipcMain.handle('read-text', async (_e, p) => {
+  try { return await fs.readFile(p, 'utf8'); } catch { return null; }
+});
+
+ipcMain.handle('write-text', async (_e, p, content) => {
+  await fs.writeFile(p + '.tmp', content, 'utf8');
+  await fs.rename(p + '.tmp', p);
+  return true;
+});
+
+ipcMain.handle('create-file', async (_e, dir, name) => {
+  const target = path.join(dir, name);
+  try { await fs.writeFile(target, '', { flag: 'wx' }); return target; }
+  catch { return null; }
+});
+
+ipcMain.handle('create-folder', async (_e, dir, name) => {
+  const target = path.join(dir, name);
+  try { await fs.mkdir(target); return target; }
+  catch { return null; }
+});
+
+ipcMain.handle('rename-path', async (_e, from, to) => {
+  try { await fs.rename(from, to); return true; }
+  catch { return false; }
+});
+
+ipcMain.handle('delete-path', async (_e, p, isDir) => {
+  try { await fs.rm(p, { recursive: !!isDir }); return true; }
+  catch { return false; }
+});

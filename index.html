@@ -109,6 +109,213 @@
       outline-offset: 2px
     }
 
+    /* ---------- sidebar / file tree ---------- */
+    #sidebar {
+      position: absolute;
+      top: 34px;
+      left: 0;
+      bottom: 0;
+      width: 240px;
+      background: var(--ink);
+      border-right: 1px solid var(--rule);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 5;
+    }
+
+    body.has-folder #sidebar {
+      display: flex
+    }
+
+    #sidebar-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 6px 8px 10px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    #sidebar-head .name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #E6EBF2;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    #sidebar-head button {
+      background: none;
+      border: 0;
+      color: var(--chrome-dim);
+      cursor: pointer;
+      font: inherit;
+      font-size: 15px;
+      line-height: 1;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+
+    #sidebar-head button:hover {
+      color: #E6EBF2;
+      background: var(--ink-2)
+    }
+
+    #tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0
+    }
+
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      color: var(--chrome-text);
+      font-size: 12.5px;
+      user-select: none;
+    }
+
+    .tree-row:hover {
+      background: var(--ink-2)
+    }
+
+    .tree-row.active {
+      background: var(--pen-soft);
+      color: #E6EBF2
+    }
+
+    .tree-row .arrow {
+      width: 10px;
+      flex: 0 0 10px;
+      color: var(--chrome-dim);
+      font-size: 9px;
+      text-align: center
+    }
+
+    .tree-row .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex: 0 0 6px;
+      background: var(--chrome-dim)
+    }
+
+    .tree-row.file-pdf .dot {
+      background: var(--pen)
+    }
+
+    .tree-row.file-md .dot {
+      background: #8FBF6F
+    }
+
+    .tree-row.file-other {
+      color: var(--chrome-dim)
+    }
+
+    .tree-row .label {
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .ctxmenu {
+      position: fixed;
+      z-index: 40;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 4px;
+      min-width: 150px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    }
+
+    .ctxmenu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 0;
+      color: var(--chrome-text);
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12.5px;
+    }
+
+    .ctxmenu button:hover {
+      background: var(--pen-soft);
+      color: #E6EBF2
+    }
+
+    #prompt-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 35;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 13, 18, .86);
+    }
+
+    #prompt-modal.hidden {
+      display: none
+    }
+
+    #prompt-modal .card {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 20px 22px;
+      width: min(420px, 90vw);
+    }
+
+    #prompt-modal h2 {
+      margin: 0 0 12px;
+      font-family: var(--serif);
+      font-weight: 400;
+      color: #E6EBF2;
+      font-size: 16px;
+    }
+
+    #prompt-modal input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 8px 9px;
+      background: var(--ink);
+      color: #E6EBF2;
+      font: 13px var(--mono);
+    }
+
+    #prompt-modal .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    #prompt-modal button.action {
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 6px 12px;
+      background: var(--ink);
+      color: var(--chrome-text);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    #prompt-modal button.action:hover {
+      border-color: #455266;
+      color: #E6EBF2
+    }
+
     /* ---------- viewer ---------- */
     #surface {
       position: absolute;
@@ -119,6 +326,74 @@
       overflow-y: auto;
       scroll-behavior: auto;
       padding: 18px 0 55vh;
+    }
+
+    body.has-folder #surface,
+    body.has-folder #drop {
+      left: 240px
+    }
+
+    #pages.hidden {
+      display: none
+    }
+
+    /* ---------- standalone note file (Obsidian-style) ---------- */
+    #notefile {
+      display: flex;
+      justify-content: center;
+    }
+
+    #notefile.hidden {
+      display: none
+    }
+
+    .notefile-page {
+      background: var(--paper);
+      color: var(--note-text);
+      width: min(760px, 100%);
+      min-height: calc(100vh - 34px - 60px);
+      padding: 56px 64px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 8px 22px rgba(0, 0, 0, .35);
+    }
+
+    .notefile-src,
+    .notefile-render {
+      font-family: var(--serif);
+      font-size: 16.5px;
+      line-height: 1.7;
+      color: var(--note-text)
+    }
+
+    .notefile-src {
+      display: block;
+      width: 100%;
+      border: 0;
+      outline: none;
+      resize: none;
+      background: none;
+      padding: 0;
+      min-height: calc(100vh - 34px - 60px - 112px);
+      caret-color: var(--pen)
+    }
+
+    .notefile-render {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      cursor: text
+    }
+
+    /* beats .note-render's min-height: 1.5em, which is declared later in the sheet */
+    #notefile .notefile-render {
+      min-height: calc(100vh - 34px - 60px - 112px);
+    }
+
+    .notefile-src[hidden],
+    .notefile-render[hidden] {
+      display: none
+    }
+
+    .notefile-src::placeholder {
+      color: #B6AE9E
     }
 
     .page {
@@ -529,13 +804,22 @@
 
 <body>
   <div id="bar">
-    <span id="docname">No PDF open</span>
+    <span id="docname">No file open</span>
     <span class="meta" id="pageinfo"></span>
     <span class="spacer"></span>
     <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
     <button class="chip" id="latexbtn">LaTeX</button>
-    <button class="chip" id="openbtn">Open <kbd>⌃O</kbd></button>
+    <button class="chip" id="openfolderbtn">Folder <kbd>⌃⇧O</kbd></button>
+    <button class="chip" id="openbtn">Open PDF <kbd>⌃O</kbd></button>
     <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-head">
+      <span class="name" id="sidebar-name">Folder</span>
+      <button id="sidebar-new" title="New note">＋</button>
+    </div>
+    <div id="tree"></div>
   </div>
 
   <div id="surface" tabindex="0">
@@ -543,9 +827,18 @@
       <h1>Drop a lecture PDF here</h1>
       <p>Ctrl-click anywhere on a page. The page opens at that
         exact line and a note starts there, in Markdown with LaTeX.</p>
-      <p><button class="chip" id="openbtn2">Open a PDF</button></p>
+      <p>
+        <button class="chip" id="openbtn2">Open a PDF</button>
+        <button class="chip" id="openfolderbtn2">Open a folder</button>
+      </p>
     </div>
     <div id="pages"></div>
+    <div id="notefile" class="hidden">
+      <div class="notefile-page">
+        <textarea id="notefile-src" class="notefile-src" spellcheck="false" placeholder="Start writing…" hidden></textarea>
+        <div id="notefile-render" class="note-render notefile-render"></div>
+      </div>
+    </div>
   </div>
 
   <div id="help" class="hidden">
@@ -564,6 +857,8 @@
         <dd>Delete the note you are in</dd>
         <dt>Ctrl+O</dt>
         <dd>Open a PDF</dd>
+        <dt>Ctrl+Shift+O</dt>
+        <dd>Open a folder in the sidebar</dd>
         <dt>Ctrl+= / Ctrl+- / Ctrl+0</dt>
         <dd>Zoom in, out, reset</dd>
         <dt>Ctrl+E</dt>
@@ -576,6 +871,11 @@
         <code style="font-family:var(--mono)">$$…$$</code>. Everything saves as you type.
         Type <code style="font-family:var(--mono)">mk</code> or
         <code style="font-family:var(--mono)">frac</code> followed by Tab for a LaTeX snippet.
+      </p>
+      <p style="color:var(--chrome-dim);margin:10px 0 0;line-height:1.6">
+        Open a folder to browse its PDFs and Markdown notes in the sidebar.
+        Click the <strong>＋</strong> or right-click for a new note or folder;
+        right-click any item to rename or delete it.
       </p>
     </div>
   </div>
@@ -593,6 +893,17 @@
         <button id="snippet-add">Add snippet</button>
         <button id="snippet-reset">Reset defaults</button>
         <button id="snippet-close">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="prompt-modal" class="hidden">
+    <div class="card">
+      <h2 id="prompt-title">Name</h2>
+      <input id="prompt-input" type="text" spellcheck="false">
+      <div class="actions">
+        <button class="action" id="prompt-cancel">Cancel</button>
+        <button class="action" id="prompt-ok">OK</button>
       </div>
     </div>
   </div>
@@ -650,6 +961,8 @@
       pages: [],                 // {num,el,w,h,bitmap,rendered,rendering}
       scale: 1.25,
       hover: null,               // {page,y,x}
+      folder: null,               // open folder path, or null
+      activeFile: null,           // {type:'pdf'|'note', path}
     };
     const isMac = navigator.platform.toLowerCase().includes('mac');
     const $ = s => document.querySelector(s);
@@ -869,16 +1182,18 @@
      *  opening a document
      * ------------------------------------------------------------------ */
     async function openBytes(bytes, name, path) {
+      setMode('pdf');
       State.name = name || 'document.pdf'; State.path = path || null;
       State.key = path || fingerprint(bytes);
+      State.activeFile = path ? { type: 'pdf', path } : null;
       State.doc = await pdfjsLib.getDocument({ data: bytes }).promise;
       State.notes = await loadNotes();
       $('#docname').textContent = State.name;
-      $('#drop').classList.add('hidden');
       await buildPages();
       surface.focus();
       const n = State.notes.length;
       toast(n ? `${n} note${n > 1 ? 's' : ''} restored` : `${State.doc.numPages} pages ready`);
+      renderTree();
     }
     async function pickFile() {
       if (hasShell) {
@@ -891,6 +1206,278 @@
       const buf = new Uint8Array(await f.arrayBuffer());
       openBytes(buf, f.name, null);
       e.target.value = '';
+    });
+
+    /* ------------------------------------------------------------------ *
+     *  view modes — the surface shows exactly one of: drop / pdf / note
+     * ------------------------------------------------------------------ */
+    function setMode(mode) {
+      $('#drop').classList.toggle('hidden', mode !== 'empty');
+      pagesEl.classList.toggle('hidden', mode !== 'pdf');
+      $('#notefile').classList.toggle('hidden', mode !== 'note');
+      if (mode !== 'pdf' && io) { io.disconnect(); io = null; }
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  folder / file tree — the "vault" side of the app
+     * ------------------------------------------------------------------ */
+    const treeCache = new Map();     // dirPath -> entries[]
+    const expandedDirs = new Set();
+    let noteSaveTimer = null;
+
+    async function openFolder(pathArg) {
+      const dir = pathArg || (hasShell ? await window.margin.openFolder() : null);
+      if (!dir) return;
+      State.folder = dir;
+      treeCache.clear(); expandedDirs.clear();
+      document.body.classList.add('has-folder');
+      $('#sidebar-name').textContent = dir.split('/').filter(Boolean).pop() || dir;
+      localStorage.setItem('margin:last-folder', dir);
+      await ensureDirLoaded(dir);
+      renderTree();
+      if (!State.activeFile) { setMode('empty'); }
+    }
+
+    async function ensureDirLoaded(dir) {
+      if (treeCache.has(dir)) return treeCache.get(dir);
+      const entries = await window.margin.readDir(dir);
+      treeCache.set(dir, entries);
+      return entries;
+    }
+
+    function extOf(name) {
+      const m = /\.([^.]+)$/.exec(name);
+      return m ? m[1].toLowerCase() : '';
+    }
+
+    function renderTree() {
+      const root = $('#tree');
+      root.innerHTML = '';
+      if (!State.folder) return;
+      root.appendChild(buildRows(treeCache.get(State.folder) || [], 0));
+    }
+
+    function buildRows(entries, depth) {
+      const frag = document.createDocumentFragment();
+      for (const entry of entries) {
+        const kind = entry.isDir ? 'dir' : (extOf(entry.name) === 'pdf' ? 'file-pdf' : /^(md|markdown|txt)$/.test(extOf(entry.name)) ? 'file-md' : 'file-other');
+        const row = document.createElement('div');
+        row.className = 'tree-row ' + kind;
+        row.style.paddingLeft = (10 + depth * 14) + 'px';
+        row.dataset.path = entry.path;
+        if (State.activeFile && State.activeFile.path === entry.path) row.classList.add('active');
+
+        const arrow = document.createElement('span'); arrow.className = 'arrow';
+        arrow.textContent = entry.isDir ? (expandedDirs.has(entry.path) ? '▾' : '▸') : '';
+        const dot = document.createElement('span'); dot.className = 'dot';
+        const label = document.createElement('span'); label.className = 'label'; label.textContent = entry.name;
+        row.append(arrow, dot, label);
+
+        row.addEventListener('click', () => onTreeClick(entry));
+        row.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showTreeMenu(e, entry); });
+        frag.appendChild(row);
+
+        if (entry.isDir && expandedDirs.has(entry.path)) {
+          frag.appendChild(buildRows(treeCache.get(entry.path) || [], depth + 1));
+        }
+      }
+      return frag;
+    }
+
+    async function onTreeClick(entry) {
+      if (entry.isDir) {
+        if (expandedDirs.has(entry.path)) expandedDirs.delete(entry.path);
+        else { expandedDirs.add(entry.path); await ensureDirLoaded(entry.path); }
+        renderTree();
+        return;
+      }
+      const ext = extOf(entry.name);
+      if (ext === 'pdf') await openPdfFromTree(entry.path);
+      else if (/^(md|markdown|txt)$/.test(ext)) await openNoteFile(entry.path);
+      else toast(`Margin can't open .${ext} files`);
+    }
+
+    async function openPdfFromTree(path) {
+      const f = await window.margin.readPdf(path);
+      if (!f) { toast('Could not read ' + path.split('/').pop()); return; }
+      await openBytes(f.bytes, f.name, f.path);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  standalone note file — the Obsidian-style side of the app
+     * ------------------------------------------------------------------ */
+    async function openNoteFile(path) {
+      const text = await window.margin.readText(path);
+      if (text == null) { toast('Could not read ' + path.split('/').pop()); return; }
+      State.activeFile = { type: 'note', path };
+      State.doc = null; State.path = null;
+      $('#docname').textContent = path.split('/').pop();
+      $('#pageinfo').textContent = '';
+      setMode('note');
+      const source = $('#notefile-src'), rendered = $('#notefile-render');
+      source.value = text; source._snippetStops = null;
+      renderMarkdown(text, rendered);
+      source.hidden = true; rendered.hidden = false;
+      surface.scrollTop = 0;
+      renderTree();
+    }
+
+    function scheduleNoteSave() { clearTimeout(noteSaveTimer); noteSaveTimer = setTimeout(saveNoteFile, 400); }
+    async function saveNoteFile() {
+      if (!State.activeFile || State.activeFile.type !== 'note') return;
+      try { await window.margin.writeText(State.activeFile.path, $('#notefile-src').value); }
+      catch (e) { toast('Note could not be saved: ' + e.message); }
+    }
+
+    function initNoteFileEditor() {
+      const source = $('#notefile-src'), rendered = $('#notefile-render');
+      const finish = () => {
+        renderMarkdown(source.value, rendered);
+        source.hidden = true; rendered.hidden = false;
+      };
+      const edit = () => {
+        source.hidden = false; rendered.hidden = true;
+        source.focus();
+        source.setSelectionRange(source.value.length, source.value.length);
+        autoGrow(source);
+      };
+      source.addEventListener('input', () => {
+        updateSnippetStops(source); autoGrow(source); scheduleNoteSave();
+      });
+      source.addEventListener('blur', finish);
+      source.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          if (moveSnippetTab(source) || expandSnippet(source, false)) return;
+          source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
+          source.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+        if (e.key === 'Escape') { e.preventDefault(); finish(); surface.focus(); }
+      });
+      rendered.addEventListener('click', edit);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  creating, renaming, deleting tree entries
+     * ------------------------------------------------------------------ */
+    // Electron's renderer doesn't implement window.prompt() (it throws), so
+    // filenames go through this small in-page modal instead.
+    function promptText(title, defaultValue) {
+      return new Promise(resolve => {
+        const modal = $('#prompt-modal'), input = $('#prompt-input');
+        $('#prompt-title').textContent = title;
+        input.value = defaultValue || '';
+        modal.classList.remove('hidden');
+        input.focus(); input.select();
+        const done = value => {
+          modal.classList.add('hidden');
+          input.removeEventListener('keydown', onKey);
+          okBtn.onclick = null; cancelBtn.onclick = null;
+          resolve(value);
+        };
+        const onKey = e => {
+          if (e.key === 'Enter') { e.preventDefault(); done(input.value); }
+          else if (e.key === 'Escape') { e.preventDefault(); done(null); }
+        };
+        const okBtn = $('#prompt-ok'), cancelBtn = $('#prompt-cancel');
+        input.addEventListener('keydown', onKey);
+        okBtn.onclick = () => done(input.value);
+        cancelBtn.onclick = () => done(null);
+      });
+    }
+
+    function dirOf(p) { return p.split('/').slice(0, -1).join('/'); }
+
+    async function invalidateAndReload(dir) {
+      treeCache.delete(dir);
+      await ensureDirLoaded(dir);
+      renderTree();
+    }
+
+    async function newNoteIn(dir) {
+      let name = await promptText('New note name', 'Untitled.md');
+      if (!name) return;
+      if (!/\.[^./]+$/.test(name)) name += '.md';
+      const p = await window.margin.createFile(dir, name);
+      if (!p) { toast(`Could not create "${name}" — it may already exist`); return; }
+      expandedDirs.add(dir);
+      await invalidateAndReload(dir);
+      await openNoteFile(p);
+      $('#notefile-render').click(); // jump straight into editing a blank note
+    }
+
+    async function newFolderIn(dir) {
+      const name = await promptText('New folder name', 'New Folder');
+      if (!name) return;
+      const p = await window.margin.createFolder(dir, name);
+      if (!p) { toast(`Could not create "${name}" — it may already exist`); return; }
+      expandedDirs.add(dir);
+      await invalidateAndReload(dir);
+    }
+
+    async function renameEntry(entry) {
+      const name = await promptText('Rename to', entry.name);
+      if (!name || name === entry.name) return;
+      const dir = dirOf(entry.path), to = dir + '/' + name;
+      const ok = await window.margin.renamePath(entry.path, to);
+      if (!ok) { toast('Rename failed'); return; }
+      if (State.activeFile && State.activeFile.path === entry.path) State.activeFile.path = to;
+      await invalidateAndReload(dir);
+    }
+
+    async function deleteEntry(entry) {
+      if (!confirm(`Delete "${entry.name}"? This cannot be undone.`)) return;
+      const ok = await window.margin.deletePath(entry.path, entry.isDir);
+      if (!ok) { toast('Delete failed'); return; }
+      if (State.activeFile && (State.activeFile.path === entry.path ||
+        (entry.isDir && State.activeFile.path.startsWith(entry.path + '/')))) {
+        State.activeFile = null; State.doc = null;
+        $('#docname').textContent = 'No file open'; $('#pageinfo').textContent = '';
+        setMode('empty');
+      }
+      await invalidateAndReload(dirOf(entry.path));
+    }
+
+    function showTreeMenu(e, entry) {
+      closeCtxMenu();
+      const items = [];
+      if (entry.isDir) {
+        items.push(['New note', () => newNoteIn(entry.path)]);
+        items.push(['New folder', () => newFolderIn(entry.path)]);
+      }
+      items.push(['Rename', () => renameEntry(entry)]);
+      items.push(['Delete', () => deleteEntry(entry)]);
+      openCtxMenu(e.clientX, e.clientY, items);
+    }
+
+    function showRootMenu(e) {
+      closeCtxMenu();
+      openCtxMenu(e.clientX, e.clientY, [
+        ['New note', () => newNoteIn(State.folder)],
+        ['New folder', () => newFolderIn(State.folder)]
+      ]);
+    }
+
+    function openCtxMenu(x, y, items) {
+      const menu = document.createElement('div'); menu.className = 'ctxmenu'; menu.id = 'ctxmenu';
+      for (const [label, fn] of items) {
+        const b = document.createElement('button'); b.textContent = label;
+        b.onclick = () => { closeCtxMenu(); fn(); };
+        menu.appendChild(b);
+      }
+      document.body.appendChild(menu);
+      menu.style.left = Math.min(x, window.innerWidth - 170) + 'px';
+      menu.style.top = Math.min(y, window.innerHeight - items.length * 30 - 14) + 'px';
+    }
+    function closeCtxMenu() { const m = $('#ctxmenu'); if (m) m.remove(); }
+    window.addEventListener('mousedown', e => { if (!e.target.closest('.ctxmenu')) closeCtxMenu(); });
+    window.addEventListener('blur', closeCtxMenu);
+
+    $('#sidebar-new').onclick = () => { if (State.folder) newNoteIn(State.folder); };
+    $('#sidebar').addEventListener('contextmenu', e => {
+      if (e.target.closest('.tree-row') || !State.folder) return;
+      e.preventDefault(); showRootMenu(e);
     });
 
     /* ------------------------------------------------------------------ *
@@ -1119,12 +1706,20 @@
      *  global keys
      * ------------------------------------------------------------------ */
     window.addEventListener('keydown', e => {
-      const inEditor = e.target.classList && e.target.classList.contains('note-src');
+      if (e.target.id === 'prompt-input') return; // handled by promptText's own listener
+      const inEditor = e.target.tagName === 'TEXTAREA' && e.target.classList.contains('note-src') ||
+        e.target.id === 'notefile-src';
       const mod = e.ctrlKey || e.metaKey;
 
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openFolder(); return; }
       if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickFile(); return; }
       if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); exportMarkdown(); return; }
-      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); toast('Saved'); return; }
+      if (mod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        (State.activeFile && State.activeFile.type === 'note' ? saveNoteFile() : saveNow());
+        toast('Saved');
+        return;
+      }
       if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoom(1.15); return; }
       if (mod && e.key === '-') { e.preventDefault(); zoom(1 / 1.15); return; }
       if (mod && e.key === '0') { e.preventDefault(); zoom(null); return; }
@@ -1140,6 +1735,9 @@
 
     $('#openbtn').onclick = pickFile;
     $('#openbtn2').onclick = pickFile;
+    $('#openfolderbtn').onclick = () => openFolder();
+    $('#openfolderbtn2').onclick = () => openFolder();
+    if (!hasShell) { $('#openfolderbtn').style.display = 'none'; $('#openfolderbtn2').style.display = 'none'; }
     $('#helpbtn').onclick = () => $('#help').classList.toggle('hidden');
     $('#help').onclick = e => { if (e.target.id === 'help') $('#help').classList.add('hidden'); };
 
@@ -1204,10 +1802,20 @@
       } catch (err) {
         toast('Could not load the PDF and math libraries — check the network or run npm run vendor');
       }
+      initNoteFileEditor();
       surface.focus();
+      let openedFromArg = false;
       if (hasShell && window.margin.argPath) {
         const p = await window.margin.argPath();
-        if (p) { const f = await window.margin.readPdf(p); if (f) openBytes(f.bytes, f.name, f.path); }
+        if (p) {
+          const f = await window.margin.readPdf(p);
+          if (f) { openBytes(f.bytes, f.name, f.path); openedFromArg = true; }
+        }
+      }
+      if (hasShell) {
+        const last = localStorage.getItem('margin:last-folder');
+        if (last) await openFolder(last);
+        if (!openedFromArg && !State.activeFile) setMode('empty');
       }
     })();
   </script>
