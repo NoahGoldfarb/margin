@@ -838,6 +838,78 @@
       pointer-events: none;
     }
 
+    /* temporary "found it" flash after jumping to a search result */
+    .search-flash {
+      position: absolute;
+      pointer-events: none;
+      background: var(--pen-soft);
+      outline: 2px solid var(--pen);
+      border-radius: 3px;
+      animation: search-flash-pulse 1.8s var(--ease) forwards;
+    }
+
+    @keyframes search-flash-pulse {
+      0% {
+        opacity: 0;
+        transform: scale(1.05)
+      }
+
+      12% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      70% {
+        opacity: 1
+      }
+
+      100% {
+        opacity: 0
+      }
+    }
+
+    .note.flash {
+      box-shadow: 0 0 0 3px var(--pen), 0 6px 20px rgba(0, 0, 0, .4);
+      animation: note-flash-pulse 1.8s var(--ease);
+    }
+
+    @keyframes note-flash-pulse {
+      0% {
+        box-shadow: 0 0 0 0 var(--pen-soft), 0 6px 20px rgba(0, 0, 0, .4)
+      }
+
+      15% {
+        box-shadow: 0 0 0 3px var(--pen), 0 6px 20px rgba(0, 0, 0, .4)
+      }
+
+      100% {
+        box-shadow: 0 0 0 3px var(--pen), 0 6px 20px rgba(0, 0, 0, .4)
+      }
+    }
+
+    .search-flash-text {
+      background: var(--pen-soft);
+      border-radius: 2px;
+      animation: text-flash-pulse 1.8s var(--ease);
+    }
+
+    @keyframes text-flash-pulse {
+      0% {
+        background: var(--pen);
+        color: var(--note);
+      }
+
+      15% {
+        background: var(--pen);
+        color: var(--note);
+      }
+
+      100% {
+        background: var(--pen-soft);
+        color: inherit;
+      }
+    }
+
     .pagenum {
       position: absolute;
       left: -42px;
@@ -2138,6 +2210,8 @@
      *  page layout — pages are sliced at every note position
      * ------------------------------------------------------------------ */
     let io = null;
+    let flashRect = null;   // {page,x0,y0,x1,y1} — transient "found it" flash after a search jump
+    let flashTimer = null;
     async function buildPages() {
       pagesEl.innerHTML = ''; State.pages = [];
       if (io) io.disconnect();
@@ -2248,6 +2322,19 @@
           layoutPage(p); scheduleSave();
         });
         wrap.appendChild(el);
+      }
+
+      if (flashRect && flashRect.page === p.num) {
+        const top = Math.max(flashRect.y0, y0), bottom = Math.min(flashRect.y1, y1);
+        if (bottom > top) {
+          const el = document.createElement('div');
+          el.className = 'search-flash';
+          el.style.left = (flashRect.x0 * 100) + '%';
+          el.style.width = ((flashRect.x1 - flashRect.x0) * 100) + '%';
+          el.style.top = (((top - y0) / (y1 - y0)) * 100) + '%';
+          el.style.height = (((bottom - top) / (y1 - y0)) * 100) + '%';
+          wrap.appendChild(el);
+        }
       }
 
       const guide = document.createElement('div');
@@ -2446,8 +2533,22 @@
             for (let n = 1; n <= pdf.numPages; n++) {
               const pg = await pdf.getPage(n);
               const tc = await pg.getTextContent();
-              const text = tc.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
-              pages.push({ num: n, text });
+              const vp = pg.getViewport({ scale: 1 });
+              // page-relative (0..1, top-down) position of each text run, so a
+              // search hit can flash the exact line it was found on later
+              const items = tc.items.filter(it => it.str && it.str.trim()).map(it => {
+                const fontH = Math.max(4, Math.hypot(it.transform[2], it.transform[3]));
+                const baseY = it.transform[5];
+                return {
+                  str: it.str,
+                  x: it.transform[4] / vp.width,
+                  w: (it.width || fontH * it.str.length * 0.5) / vp.width,
+                  top: Math.max(0, Math.min(1, 1 - (baseY + fontH * 0.8) / vp.height)),
+                  bottom: Math.max(0, Math.min(1, 1 - (baseY - fontH * 0.25) / vp.height))
+                };
+              });
+              const text = items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+              pages.push({ num: n, text, items });
             }
           }
         } catch (e) { /* unreadable/corrupt pdf — still searchable by filename */ }
@@ -2612,7 +2713,67 @@
       if (el) el.scrollIntoView({ block: 'nearest' });
     }
 
-    async function jumpToPdfLocation(pageNum, noteId) {
+    // finds the first matching text run on a page and returns a page-relative
+    // rect spanning its whole line, for the transient "found it" flash
+    function findMatchRect(page, words) {
+      if (!page.items || !page.items.length) return null;
+      const hit = page.items.find(it => {
+        const low = it.str.toLowerCase();
+        return words.some(w => low.includes(w));
+      });
+      if (!hit) return null;
+      const eps = 0.006;
+      const midY = (hit.top + hit.bottom) / 2;
+      const line = page.items.filter(it => Math.abs((it.top + it.bottom) / 2 - midY) < eps);
+      return {
+        x0: Math.max(0, Math.min(...line.map(it => it.x)) - 0.006),
+        x1: Math.min(1, Math.max(...line.map(it => it.x + it.w)) + 0.006),
+        y0: Math.max(0, Math.min(...line.map(it => it.top)) - 0.003),
+        y1: Math.min(1, Math.max(...line.map(it => it.bottom)) + 0.003)
+      };
+    }
+
+    function flashPdfRect(pageNum, rect) {
+      clearTimeout(flashTimer);
+      flashRect = { page: pageNum, ...rect };
+      const p = State.pages[pageNum - 1];
+      if (p) layoutPage(p);
+      flashTimer = setTimeout(() => {
+        flashRect = null;
+        const p2 = State.pages[pageNum - 1];
+        if (p2) layoutPage(p2);
+      }, 1800);
+    }
+
+    function flashNoteEl(noteEl) {
+      noteEl.classList.remove('flash');
+      void noteEl.offsetWidth; // restart the animation if it's already mid-flash
+      noteEl.classList.add('flash');
+      setTimeout(() => noteEl.classList.remove('flash'), 1800);
+    }
+
+    function flashTextMatch(query) {
+      try {
+        if (!window.find(query, false, false, true, false, true, false)) return;
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const mark = document.createElement('span');
+        mark.className = 'search-flash-text';
+        range.surroundContents(mark);
+        sel.removeAllRanges();
+        mark.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setTimeout(() => {
+          const parent = mark.parentNode;
+          if (!parent) return;
+          while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+          parent.removeChild(mark);
+          parent.normalize();
+        }, 1800);
+      } catch (e) { /* range spans multiple elements — the native selection is still a visible cue */ }
+    }
+
+    async function jumpToPdfLocation(pageNum, noteId, rect) {
       const p = State.pages[pageNum - 1];
       if (!p) return;
       await renderPage(p);
@@ -2621,24 +2782,38 @@
         if (noteEl) {
           noteEl.querySelector('.note-render').click();
           noteEl.querySelector('.note-src').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          flashNoteEl(noteEl);
           return;
         }
+      }
+      if (rect) {
+        flashPdfRect(pageNum, rect);
+        await new Promise(res => requestAnimationFrame(res));
+        const flashEl = document.querySelector('.search-flash');
+        if (flashEl) { flashEl.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
       }
       p.el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
 
     async function openSearchResult(r) {
       const query = $('#search-input').value.trim();
+      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
       closeSearch();
       if (r.doc.ext === 'pdf') {
         if (State.path !== r.doc.path) await openPdfFromTree(r.doc.path);
         await new Promise(res => setTimeout(res, 30));
-        if (r.kind === 'pdf-page') jumpToPdfLocation(r.page, null);
-        else if (r.kind === 'pdf-note') jumpToPdfLocation(r.note.page, r.note.id);
-        else jumpToPdfLocation(1, null);
+        if (r.kind === 'pdf-page') {
+          const pageData = r.doc.pages.find(p => p.num === r.page);
+          jumpToPdfLocation(r.page, null, pageData ? findMatchRect(pageData, words) : null);
+        }
+        else if (r.kind === 'pdf-note') jumpToPdfLocation(r.note.page, r.note.id, null);
+        else jumpToPdfLocation(1, null, null);
       } else {
         await openNoteFile(r.doc.path);
-        if (query) { try { window.find(query); } catch (e) { } }
+        if (query) {
+          await new Promise(res => setTimeout(res, 60));
+          flashTextMatch(query);
+        }
       }
     }
 
