@@ -21,7 +21,16 @@
       --pen: #2F4CDB;
       /* split guide, caret, focus */
       --pen-soft: rgba(47, 76, 219, .18);
+      --pen-faint: rgba(47, 76, 219, .07);
+      --pen-deep: #0F2ABF;
+      --chrome-strong: #E6EBF2;
+      --rule-strong: #455266;
+      --note-border: #E7E1D4;
+      --note-muted: #7A7264;
+      --note-code-bg: #F0EADC;
+      --note-placeholder: #B6AE9E;
       --danger: #B23B3B;
+      --editor-font-scale: 1;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
       --serif: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
       --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
@@ -94,7 +103,7 @@
     }
 
     #docname {
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font-weight: 500;
       max-width: 44vw;
       overflow: hidden;
@@ -125,8 +134,8 @@
     }
 
     .chip:hover {
-      border-color: #455266;
-      color: #E6EBF2
+      border-color: var(--rule-strong);
+      color: var(--chrome-strong)
     }
 
     .chip:active {
@@ -136,7 +145,7 @@
     .chip kbd {
       font-family: var(--mono);
       font-size: 11px;
-      color: #E6EBF2
+      color: var(--chrome-strong)
     }
 
 
@@ -177,7 +186,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font-size: 12px;
       font-weight: 500;
     }
@@ -199,7 +208,7 @@
     }
 
     #sidebar-head button:hover {
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       background: var(--ink-2)
     }
 
@@ -234,7 +243,7 @@
 
     .tree-row.active {
       background: var(--pen-soft);
-      color: #E6EBF2
+      color: var(--chrome-strong)
     }
 
     .tree-row .arrow {
@@ -300,7 +309,7 @@
 
     .ctxmenu button:hover {
       background: var(--pen-soft);
-      color: #E6EBF2
+      color: var(--chrome-strong)
     }
 
     #prompt-modal {
@@ -331,7 +340,7 @@
       margin: 0 0 12px;
       font-family: var(--serif);
       font-weight: 400;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font-size: 16px;
     }
 
@@ -342,7 +351,7 @@
       border-radius: 4px;
       padding: 8px 9px;
       background: var(--ink);
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font: 13px var(--mono);
       transition: border-color var(--fast) var(--ease);
     }
@@ -366,12 +375,169 @@
     }
 
     #prompt-modal button.action:hover {
-      border-color: #455266;
-      color: #E6EBF2
+      border-color: var(--rule-strong);
+      color: var(--chrome-strong)
     }
 
     #prompt-modal button.action:active {
       transform: scale(.96)
+    }
+
+    /* ---------- settings ---------- */
+    #settings-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 13, 18, .86);
+      animation: fade-in .12s var(--ease);
+    }
+
+    #settings-modal.hidden {
+      display: none
+    }
+
+    #settings-modal .card {
+      width: min(480px, 92vw);
+      max-height: 86vh;
+      overflow: auto;
+      padding: 22px 26px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      animation: modal-in .16s var(--ease);
+    }
+
+    #settings-modal h2 {
+      margin: 0 0 4px;
+      color: var(--chrome-strong);
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 20px
+    }
+
+    .settings-section {
+      margin: 20px 0
+    }
+
+    .settings-label {
+      font-size: 11px;
+      color: var(--chrome-dim);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 9px;
+    }
+
+    .swatch-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .theme-swatch {
+      width: 68px;
+      cursor: pointer;
+      border: 0;
+      background: none;
+      padding: 0;
+      font: inherit;
+      color: var(--chrome-dim);
+      transition: color var(--fast) var(--ease);
+    }
+
+    .theme-swatch .preview {
+      height: 36px;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid var(--rule);
+      box-shadow: 0 0 0 2px transparent;
+      transition: box-shadow var(--fast) var(--ease);
+    }
+
+    .theme-swatch .preview span {
+      flex: 1
+    }
+
+    .theme-swatch:hover .preview {
+      box-shadow: 0 0 0 2px var(--rule-strong)
+    }
+
+    .theme-swatch.active .preview {
+      box-shadow: 0 0 0 2px var(--pen)
+    }
+
+    .theme-swatch.active {
+      color: var(--chrome-strong)
+    }
+
+    .theme-swatch .name {
+      display: block;
+      margin-top: 5px;
+      font-size: 11.5px;
+    }
+
+    .accent-swatch {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      padding: 0;
+      transition: transform var(--fast) var(--ease), border-color var(--fast) var(--ease);
+    }
+
+    .accent-swatch:hover {
+      transform: scale(1.1)
+    }
+
+    .accent-swatch.active {
+      border-color: var(--chrome-strong);
+      transform: scale(1.1);
+    }
+
+    .accent-swatch-custom {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid var(--rule);
+      padding: 0;
+      background: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      overflow: hidden;
+    }
+
+    .accent-swatch-custom::-webkit-color-swatch-wrapper {
+      padding: 0
+    }
+
+    .accent-swatch-custom::-webkit-color-swatch {
+      border: 0;
+      border-radius: 50%;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .settings-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--pen);
+    }
+
+    .settings-value {
+      font-variant-numeric: tabular-nums;
+      color: var(--chrome-text);
+      font-size: 12.5px;
+      min-width: 38px;
+      text-align: right;
     }
 
     /* ---------- viewer ---------- */
@@ -406,7 +572,7 @@
     }
 
     .notefile-page {
-      background: var(--paper);
+      background: var(--note);
       color: var(--note-text);
       width: min(760px, 100%);
       min-height: calc(100vh - 34px - 60px);
@@ -418,7 +584,7 @@
     .notefile-src,
     .notefile-render {
       font-family: var(--serif);
-      font-size: 16.5px;
+      font-size: calc(16.5px * var(--editor-font-scale));
       line-height: 1.7;
       color: var(--note-text)
     }
@@ -453,7 +619,7 @@
     }
 
     .notefile-src::placeholder {
-      color: #B6AE9E
+      color: var(--note-placeholder)
     }
 
     .page {
@@ -587,7 +753,7 @@
     }
 
     .note.is-editing {
-      border-left-color: #0F2ABF
+      border-left-color: var(--pen-deep)
     }
 
     .note-head {
@@ -595,8 +761,8 @@
       align-items: center;
       gap: 10px;
       padding: 4px 10px;
-      border-bottom: 1px solid #E7E1D4;
-      color: #7A7264;
+      border-bottom: 1px solid var(--note-border);
+      color: var(--note-muted);
       font-size: 11px;
       font-variant-numeric: tabular-nums;
     }
@@ -608,7 +774,7 @@
     .note-head button {
       border: 0;
       background: none;
-      color: #7A7264;
+      color: var(--note-muted);
       cursor: pointer;
       font: inherit;
       padding: 2px 4px;
@@ -634,6 +800,7 @@
 
     .note-render {
       min-height: 1.5em;
+      font-size: calc(14px * var(--editor-font-scale));
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       cursor: text
@@ -646,11 +813,11 @@
       border: 0;
       resize: none;
       outline: none;
-      background: rgba(47, 76, 219, .07);
+      background: var(--pen-faint);
       border-radius: 3px;
-      color: #2A2F3A;
+      color: var(--note-text);
       font-family: var(--mono);
-      font-size: 13px;
+      font-size: calc(13px * var(--editor-font-scale));
       line-height: 1.55;
       padding: 2px 4px;
       overflow: hidden;
@@ -663,7 +830,7 @@
     }
 
     .note-src::placeholder {
-      color: #B6AE9E
+      color: var(--note-placeholder)
     }
 
     .note-render>*:first-child {
@@ -690,13 +857,13 @@
     .note-render code {
       font-family: var(--mono);
       font-size: .85em;
-      background: #F0EADC;
+      background: var(--note-code-bg);
       padding: 1px 4px;
       border-radius: 3px
     }
 
     .note-render pre {
-      background: #F0EADC;
+      background: var(--note-code-bg);
       padding: 8px 10px;
       overflow-x: auto;
       border-radius: 4px
@@ -710,8 +877,8 @@
     .note-render blockquote {
       margin: .4em 0;
       padding-left: .8em;
-      border-left: 2px solid #DCD4C2;
-      color: #5C5648
+      border-left: 2px solid var(--note-border);
+      color: var(--note-muted)
     }
 
     .note-render table {
@@ -720,7 +887,7 @@
 
     .note-render td,
     .note-render th {
-      border: 1px solid #DCD4C2;
+      border: 1px solid var(--note-border);
       padding: 2px 7px
     }
 
@@ -745,7 +912,7 @@
       font-family: var(--serif);
       font-weight: 400;
       font-size: 30px;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       margin: 0
     }
 
@@ -790,7 +957,7 @@
       margin: 0 0 14px;
       font-family: var(--serif);
       font-weight: 400;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font-size: 20px
     }
 
@@ -804,7 +971,7 @@
     #help dt {
       font-family: var(--mono);
       font-size: 12px;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       white-space: nowrap
     }
 
@@ -839,7 +1006,7 @@
 
     #latex-settings h2 {
       margin: 0 0 6px;
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font-family: var(--serif);
       font-weight: 400
     }
@@ -859,7 +1026,7 @@
       border-radius: 4px;
       padding: 7px 8px;
       background: var(--ink);
-      color: #E6EBF2;
+      color: var(--chrome-strong);
       font: 13px var(--mono);
       transition: border-color var(--fast) var(--ease);
     }
@@ -878,8 +1045,8 @@
 
     .snippet-row button:hover,
     #snippet-add:hover, #snippet-reset:hover, #snippet-close:hover {
-      border-color: #455266;
-      color: #E6EBF2
+      border-color: var(--rule-strong);
+      color: var(--chrome-strong)
     }
 
     .snippet-row button:active,
@@ -943,6 +1110,7 @@
     <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
     <span class="chip" title="Drag on a page to highlight it">highlight <kbd>Drag</kbd></span>
     <button class="chip" id="latexbtn">LaTeX</button>
+    <button class="chip" id="settingsbtn">Settings <kbd>⌃,</kbd></button>
     <button class="chip" id="openfolderbtn">Folder <kbd>⌃⇧O</kbd></button>
     <button class="chip" id="openbtn">Open PDF <kbd>⌃O</kbd></button>
     <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
@@ -995,6 +1163,8 @@
         <dd>Open a PDF</dd>
         <dt>Ctrl+Shift+O</dt>
         <dd>Open a folder in the sidebar</dd>
+        <dt>Ctrl+,</dt>
+        <dd>Settings — theme, accent color, note text size</dd>
         <dt>Ctrl+= / Ctrl+- / Ctrl+0</dt>
         <dd>Zoom in, out, reset</dd>
         <dt>Ctrl+E</dt>
@@ -1013,6 +1183,31 @@
         Click the <strong>＋</strong> or right-click for a new note or folder;
         right-click any item to rename or delete it.
       </p>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="hidden">
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="settings-section">
+        <div class="settings-label">Theme</div>
+        <div class="swatch-row" id="theme-swatches"></div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-label">Accent color</div>
+        <div class="swatch-row" id="accent-swatches"></div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-label">Note text size</div>
+        <div class="settings-row">
+          <input type="range" id="font-scale-range" min="0.85" max="1.3" step="0.05">
+          <span class="settings-value" id="font-scale-value">100%</span>
+        </div>
+      </div>
+      <div class="snippet-actions">
+        <button id="settings-reset">Reset to defaults</button>
+        <button id="settings-close">Done</button>
+      </div>
     </div>
   </div>
 
@@ -1104,6 +1299,97 @@
     const isMac = navigator.platform.toLowerCase().includes('mac');
     const $ = s => document.querySelector(s);
     const surface = $('#surface'), pagesEl = $('#pages');
+
+    /* ------------------------------------------------------------------ *
+     *  appearance — themes, accent color, note text size
+     * ------------------------------------------------------------------ */
+    const THEMES = {
+      ink: {
+        label: 'Ink', dark: true,
+        ink: '#151A22', ink2: '#1E2530', rule: '#2C3644',
+        chromeText: '#AEB8C7', chromeDim: '#6C7787', chromeStrong: '#E6EBF2',
+        note: '#FBF8F1', noteText: '#1B2029'
+      },
+      midnight: {
+        label: 'Midnight', dark: true,
+        ink: '#12141C', ink2: '#1A1D28', rule: '#2A2E3D',
+        chromeText: '#AEB4C9', chromeDim: '#666C82', chromeStrong: '#E8EAF7',
+        note: '#1C2029', noteText: '#D7DCE8'
+      },
+      paper: {
+        label: 'Paper', dark: false,
+        ink: '#F2EFE7', ink2: '#E7E1D2', rule: '#D6CDB9',
+        chromeText: '#4B473D', chromeDim: '#867F6E', chromeStrong: '#151310',
+        note: '#FFFFFF', noteText: '#1B2029'
+      },
+      sepia: {
+        label: 'Sepia', dark: false,
+        ink: '#EFE4CC', ink2: '#E4D3AC', rule: '#CDB98C',
+        chromeText: '#4A3B22', chromeDim: '#8A7550', chromeStrong: '#241C0E',
+        note: '#FBF3E1', noteText: '#3A2E19'
+      }
+    };
+    const ACCENTS = [
+      { label: 'Blue', value: '#2F4CDB' },
+      { label: 'Violet', value: '#8B5CF6' },
+      { label: 'Green', value: '#3FA34D' },
+      { label: 'Teal', value: '#2AA9A0' },
+      { label: 'Coral', value: '#E0555A' },
+      { label: 'Amber', value: '#D98B2B' },
+    ];
+    const DEFAULT_APPEARANCE = { theme: 'ink', accent: '#2F4CDB', fontScale: 1 };
+
+    function hexToRgb(hex) {
+      const h = hex.replace('#', '');
+      const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+      const n = parseInt(v, 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function hexToRgba(hex, alpha) {
+      const [r, g, b] = hexToRgb(hex);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    function mixHex(hexA, hexB, t) {
+      const a = hexToRgb(hexA), b = hexToRgb(hexB);
+      const r = Math.round(a[0] + (b[0] - a[0]) * t);
+      const g = Math.round(a[1] + (b[1] - a[1]) * t);
+      const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+      return `rgb(${r}, ${g}, ${bl})`;
+    }
+
+    function loadAppearance() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('margin:appearance'));
+        if (saved && typeof saved === 'object') return { ...DEFAULT_APPEARANCE, ...saved };
+      } catch (e) { }
+      return { ...DEFAULT_APPEARANCE };
+    }
+    let appearance = loadAppearance();
+    function saveAppearance() { localStorage.setItem('margin:appearance', JSON.stringify(appearance)); }
+
+    function applyAppearance() {
+      const t = THEMES[appearance.theme] || THEMES.ink;
+      const root = document.documentElement.style;
+      root.setProperty('--ink', t.ink);
+      root.setProperty('--ink-2', t.ink2);
+      root.setProperty('--rule', t.rule);
+      root.setProperty('--rule-strong', mixHex(t.rule, t.chromeStrong, .5));
+      root.setProperty('--chrome-text', t.chromeText);
+      root.setProperty('--chrome-dim', t.chromeDim);
+      root.setProperty('--chrome-strong', t.chromeStrong);
+      root.setProperty('--note', t.note);
+      root.setProperty('--note-text', t.noteText);
+      root.setProperty('--note-border', mixHex(t.note, t.noteText, .16));
+      root.setProperty('--note-muted', mixHex(t.note, t.noteText, .48));
+      root.setProperty('--note-code-bg', mixHex(t.note, t.noteText, .07));
+      root.setProperty('--note-placeholder', mixHex(t.note, t.noteText, .40));
+      root.setProperty('--pen', appearance.accent);
+      root.setProperty('--pen-soft', hexToRgba(appearance.accent, .18));
+      root.setProperty('--pen-faint', hexToRgba(appearance.accent, .07));
+      root.setProperty('--pen-deep', mixHex(appearance.accent, '#000000', .35));
+      root.setProperty('--editor-font-scale', appearance.fontScale);
+    }
+    applyAppearance();
 
     const DEFAULT_SNIPPETS = [
       { trigger: 'mk', template: '$0$' },
@@ -1244,6 +1530,78 @@
     };
     $('#latex-settings').onclick = e => {
       if (e.target.id === 'latex-settings') $('#latex-settings').classList.add('hidden');
+    };
+
+    /* ------------------------------------------------------------------ *
+     *  settings — theme, accent color, note text size
+     * ------------------------------------------------------------------ */
+    function paintSettings() {
+      const themeRow = $('#theme-swatches');
+      themeRow.innerHTML = '';
+      for (const key in THEMES) {
+        const t = THEMES[key];
+        const btn = document.createElement('button');
+        btn.className = 'theme-swatch' + (appearance.theme === key ? ' active' : '');
+        const preview = document.createElement('span'); preview.className = 'preview';
+        const inkHalf = document.createElement('span');
+        inkHalf.style.background = t.ink;
+        const paperHalf = document.createElement('span');
+        paperHalf.style.background = t.note;
+        preview.append(inkHalf, paperHalf);
+        const name = document.createElement('span'); name.className = 'name'; name.textContent = t.label;
+        btn.append(preview, name);
+        btn.onclick = () => {
+          appearance.theme = key;
+          applyAppearance(); saveAppearance(); paintSettings();
+        };
+        themeRow.appendChild(btn);
+      }
+
+      const accentRow = $('#accent-swatches');
+      accentRow.innerHTML = '';
+      for (const a of ACCENTS) {
+        const btn = document.createElement('button');
+        btn.className = 'accent-swatch' + (appearance.accent.toLowerCase() === a.value.toLowerCase() ? ' active' : '');
+        btn.style.background = a.value;
+        btn.title = a.label;
+        btn.onclick = () => {
+          appearance.accent = a.value;
+          applyAppearance(); saveAppearance(); paintSettings();
+        };
+        accentRow.appendChild(btn);
+      }
+      const isPreset = ACCENTS.some(a => a.value.toLowerCase() === appearance.accent.toLowerCase());
+      const custom = document.createElement('input');
+      custom.type = 'color'; custom.className = 'accent-swatch-custom';
+      custom.title = 'Custom accent color';
+      custom.value = appearance.accent;
+      if (!isPreset) custom.style.borderColor = 'var(--pen)';
+      custom.oninput = () => {
+        appearance.accent = custom.value;
+        applyAppearance(); saveAppearance(); paintSettings();
+      };
+      accentRow.appendChild(custom);
+
+      const range = $('#font-scale-range');
+      range.value = appearance.fontScale;
+      $('#font-scale-value').textContent = Math.round(appearance.fontScale * 100) + '%';
+    }
+    $('#font-scale-range').addEventListener('input', e => {
+      appearance.fontScale = +e.target.value;
+      $('#font-scale-value').textContent = Math.round(appearance.fontScale * 100) + '%';
+      applyAppearance(); saveAppearance();
+    });
+    $('#settingsbtn').onclick = () => {
+      paintSettings();
+      $('#settings-modal').classList.remove('hidden');
+    };
+    $('#settings-close').onclick = () => $('#settings-modal').classList.add('hidden');
+    $('#settings-reset').onclick = () => {
+      appearance = { ...DEFAULT_APPEARANCE };
+      applyAppearance(); saveAppearance(); paintSettings();
+    };
+    $('#settings-modal').onclick = e => {
+      if (e.target.id === 'settings-modal') $('#settings-modal').classList.add('hidden');
     };
 
     /* ------------------------------------------------------------------ *
@@ -1927,10 +2285,20 @@
       if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoom(1.15); return; }
       if (mod && e.key === '-') { e.preventDefault(); zoom(1 / 1.15); return; }
       if (mod && e.key === '0') { e.preventDefault(); zoom(null); return; }
+      if (mod && e.key === ',') {
+        e.preventDefault();
+        paintSettings();
+        $('#settings-modal').classList.toggle('hidden');
+        return;
+      }
 
       if (!inEditor) {
         if (e.key === '?') { e.preventDefault(); $('#help').classList.toggle('hidden'); return; }
-        if (e.key === 'Escape') { $('#help').classList.add('hidden'); return; }
+        if (e.key === 'Escape') {
+          $('#help').classList.add('hidden');
+          $('#settings-modal').classList.add('hidden');
+          return;
+        }
         if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
           e.preventDefault(); hopNote(e.key === 'ArrowDown' ? 1 : -1, null); return;
         }
