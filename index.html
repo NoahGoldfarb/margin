@@ -540,6 +540,75 @@
       text-align: right;
     }
 
+    .settings-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .settings-toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .settings-toggle .track {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 20px;
+      margin-top: 1px;
+      border-radius: 10px;
+      background: var(--rule);
+      position: relative;
+      transition: background var(--fast) var(--ease);
+    }
+
+    .settings-toggle .knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--chrome-strong);
+      transition: transform var(--fast) var(--ease);
+    }
+
+    .settings-toggle input:checked+.track {
+      background: var(--pen)
+    }
+
+    .settings-toggle input:checked+.track .knob {
+      transform: translateX(14px);
+      background: #fff;
+    }
+
+    .settings-toggle input:focus-visible+.track {
+      outline: 2px solid var(--pen);
+      outline-offset: 2px;
+    }
+
+    .settings-toggle-text {
+      font-size: 12.5px;
+      color: var(--chrome-text);
+      line-height: 1.5;
+    }
+
+    .settings-toggle-text .dim {
+      color: var(--chrome-dim);
+      font-size: 11.5px;
+    }
+
+    /* the whole lecture-audio surface, switched off from Settings */
+    body.no-recording #recbtn,
+    body.no-recording #audiobar,
+    body.no-recording .note-head .at {
+      display: none !important
+    }
+
     /* ---------- search ---------- */
     #search-modal {
       position: absolute;
@@ -1574,6 +1643,16 @@
           <span class="settings-value" id="font-scale-value">100%</span>
         </div>
       </div>
+      <div class="settings-section">
+        <div class="settings-label">Lecture recording</div>
+        <label class="settings-toggle">
+          <input type="checkbox" id="recording-toggle">
+          <span class="track"><span class="knob"></span></span>
+          <span class="settings-toggle-text">Record lectures and timestamp notes<br>
+            <span class="dim">Off hides the Record button, the player and note timestamps.
+              Recordings already on disk are kept.</span></span>
+        </label>
+      </div>
       <div class="snippet-actions">
         <button id="settings-reset">Reset to defaults</button>
         <button id="settings-close">Done</button>
@@ -1708,6 +1787,48 @@
         ink: '#EFE4CC', ink2: '#E4D3AC', rule: '#CDB98C',
         chromeText: '#4A3B22', chromeDim: '#8A7550', chromeStrong: '#241C0E',
         note: '#FBF3E1', noteText: '#3A2E19'
+      },
+      mocha: {
+        label: 'Mocha', dark: true, accent: '#CBA6F7',
+        ink: '#1E1E2E', ink2: '#262637', rule: '#313244',
+        chromeText: '#BAC2DE', chromeDim: '#7F849C', chromeStrong: '#CDD6F4',
+        note: '#232336', noteText: '#CDD6F4'
+      },
+      latte: {
+        label: 'Latte', dark: false, accent: '#8839EF',
+        ink: '#EFF1F5', ink2: '#E6E9EF', rule: '#CCD0DA',
+        chromeText: '#4C4F69', chromeDim: '#6C6F85', chromeStrong: '#1E1E2E',
+        note: '#FFFFFF', noteText: '#4C4F69'
+      },
+      nord: {
+        label: 'Nord', dark: true, accent: '#88C0D0',
+        ink: '#2E3440', ink2: '#3B4252', rule: '#4C566A',
+        chromeText: '#D8DEE9', chromeDim: '#7B88A1', chromeStrong: '#ECEFF4',
+        note: '#363E4C', noteText: '#ECEFF4'
+      },
+      gruvbox: {
+        label: 'Gruvbox', dark: true, accent: '#FE8019',
+        ink: '#282828', ink2: '#32302F', rule: '#504945',
+        chromeText: '#D5C4A1', chromeDim: '#928374', chromeStrong: '#FBF1C7',
+        note: '#32302F', noteText: '#EBDBB2'
+      },
+      rosepine: {
+        label: 'Rosé Pine', dark: true, accent: '#C4A7E7',
+        ink: '#191724', ink2: '#1F1D2E', rule: '#2A2739',
+        chromeText: '#E0DEF4', chromeDim: '#6E6A86', chromeStrong: '#F0EFF6',
+        note: '#1F1D2E', noteText: '#E0DEF4'
+      },
+      tokyo: {
+        label: 'Tokyo Night', dark: true, accent: '#7AA2F7',
+        ink: '#1A1B26', ink2: '#24283B', rule: '#2F3549',
+        chromeText: '#A9B1D6', chromeDim: '#6C77A8', chromeStrong: '#C0CAF5',
+        note: '#24283B', noteText: '#C0CAF5'
+      },
+      solarized: {
+        label: 'Solarized', dark: false, accent: '#268BD2',
+        ink: '#FDF6E3', ink2: '#EEE8D5', rule: '#DDD6C1',
+        chromeText: '#586E75', chromeDim: '#728484', chromeStrong: '#073642',
+        note: '#FFFDF6', noteText: '#073642'
       }
     };
     const ACCENTS = [
@@ -1718,7 +1839,7 @@
       { label: 'Coral', value: '#E0555A' },
       { label: 'Amber', value: '#D98B2B' },
     ];
-    const DEFAULT_APPEARANCE = { theme: 'ink', accent: '#2F4CDB', fontScale: 1 };
+    const DEFAULT_APPEARANCE = { theme: 'ink', accent: '#2F4CDB', fontScale: 1, recording: true };
 
     function hexToRgb(hex) {
       const h = hex.replace('#', '');
@@ -1769,6 +1890,9 @@
       root.setProperty('--pen-faint', hexToRgba(appearance.accent, .07));
       root.setProperty('--pen-deep', mixHex(appearance.accent, '#000000', .35));
       root.setProperty('--editor-font-scale', appearance.fontScale);
+      // switching the feature off hides the button, the player and the
+      // per-note timestamps; nothing already recorded is deleted
+      document.body.classList.toggle('no-recording', appearance.recording === false);
     }
     applyAppearance();
 
@@ -2188,6 +2312,7 @@
     async function toggleRecording() {
       if (recorder) { stopRecording(); return; }
       if (startingRecording) return;
+      if (appearance.recording === false) return;
       if (!hasShell) { toast('Recording needs the desktop app'); return; }
       if (!State.path) { toast('Open a PDF to record a lecture'); return; }
       startingRecording = true;
@@ -2264,7 +2389,7 @@
       el.removeAttribute('src');
       el.load();
       $('#audiobar').classList.add('hidden');
-      if (!hasShell || !State.path) return;
+      if (!hasShell || !State.path || appearance.recording === false) return;
       const found = await window.margin.audioPath(State.path);
       if (!found) return;
       // the app is itself a file:// page, so it can play the file directly;
@@ -2334,6 +2459,9 @@
         btn.append(preview, name);
         btn.onclick = () => {
           appearance.theme = key;
+          // themes with a signature colour bring it along; the accent row
+          // below still overrides it afterwards
+          if (t.accent) appearance.accent = t.accent;
           applyAppearance(); saveAppearance(); paintSettings();
         };
         themeRow.appendChild(btn);
@@ -2367,7 +2495,16 @@
       const range = $('#font-scale-range');
       range.value = appearance.fontScale;
       $('#font-scale-value').textContent = Math.round(appearance.fontScale * 100) + '%';
+      $('#recording-toggle').checked = appearance.recording !== false;
     }
+
+    $('#recording-toggle').addEventListener('change', e => {
+      appearance.recording = e.target.checked;
+      if (!appearance.recording) stopRecording();
+      applyAppearance(); saveAppearance();
+      // turning it back on should surface an existing recording right away
+      if (appearance.recording) loadLectureAudio();
+    });
     $('#font-scale-range').addEventListener('input', e => {
       appearance.fontScale = +e.target.value;
       $('#font-scale-value').textContent = Math.round(appearance.fontScale * 100) + '%';

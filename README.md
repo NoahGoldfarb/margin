@@ -102,6 +102,26 @@ The recording is saved beside the PDF as `lecture.margin.webm`, so it moves with
 the document and can be deleted on its own. Drop your own `lecture.margin.m4a`
 (or `.mp3`, `.ogg`, `.wav`) next to a PDF and Margin will pick it up too.
 
+If you don't want any of this, turn **Lecture recording** off in `Ctrl+,` —
+the Record button, the player and the note timestamps all disappear. Nothing
+already on disk is deleted, and switching it back on brings it all back.
+
+## Themes
+
+`Ctrl+,` opens Settings: eleven themes, an accent colour, and note text size.
+
+| | |
+| --- | --- |
+| Dark | Ink (default), Midnight, Mocha, Nord, Gruvbox, Rosé Pine, Tokyo Night |
+| Light | Paper, Sepia, Latte, Solarized |
+
+Each theme sets both the app chrome and the note surface, so Midnight, Mocha,
+Nord, Gruvbox, Rosé Pine and Tokyo Night give you genuinely dark note-taking
+rather than a dark toolbar wrapped around a white page. The borrowed palettes
+carry their signature accent with them when picked; the accent row overrides it
+afterwards if you'd rather have something else. Every theme's body text clears
+WCAG AA contrast against its own background.
+
 ```
 By **Green's theorem**, $\oint_C P\,dx + Q\,dy = \iint_D (Q_x - P_y)\,dA$.
 
