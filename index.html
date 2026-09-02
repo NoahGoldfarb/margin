@@ -444,6 +444,25 @@
       background: var(--pen);
     }
 
+    .highlight {
+      position: absolute;
+      background: rgba(255, 224, 82, .45);
+      mix-blend-mode: multiply;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+
+    .highlight:hover {
+      background: rgba(255, 200, 40, .6)
+    }
+
+    .highlight-preview {
+      position: absolute;
+      background: rgba(255, 224, 82, .35);
+      border: 1px dashed rgba(180, 130, 0, .7);
+      pointer-events: none;
+    }
+
     .pagenum {
       position: absolute;
       left: -42px;
@@ -808,6 +827,7 @@
     <span class="meta" id="pageinfo"></span>
     <span class="spacer"></span>
     <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
+    <span class="chip" title="Drag on a page to highlight it">highlight <kbd>Drag</kbd></span>
     <button class="chip" id="latexbtn">LaTeX</button>
     <button class="chip" id="openfolderbtn">Folder <kbd>⌃⇧O</kbd></button>
     <button class="chip" id="openbtn">Open PDF <kbd>⌃O</kbd></button>
@@ -847,6 +867,8 @@
       <dl>
         <dt>Ctrl-click</dt>
         <dd>Split the page where you click and start a note there</dd>
+        <dt>Drag</dt>
+        <dd>Highlight that spot on the page; click a highlight to remove it</dd>
         <dt>Esc</dt>
         <dd>Leave the note and go back to the page (deletes it if empty)</dd>
         <dt>Alt+↑ / Alt+↓</dt>
@@ -958,6 +980,7 @@
     const State = {
       doc: null, path: null, key: null, name: '',
       notes: [],                 // {id,page,y,x,md,collapsed}
+      highlights: [],             // {id,page,x0,y0,x1,y1} — all page-relative 0..1
       pages: [],                 // {num,el,w,h,bitmap,rendered,rendering}
       scale: 1.25,
       hover: null,               // {page,y,x}
@@ -1150,13 +1173,14 @@
     function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
     async function saveNow() {
       if (!State.key) return;
-      const payload = { version: 1, pdf: State.name, scale: State.scale, notes: State.notes };
+      const payload = { version: 1, pdf: State.name, scale: State.scale, notes: State.notes, highlights: State.highlights };
       try {
         if (hasShell && State.path) await window.margin.saveNotes(State.path, payload);
         else localStorage.setItem('margin:' + State.key, JSON.stringify(payload));
       } catch (e) { toast('Notes could not be saved: ' + e.message); }
     }
     async function loadNotes() {
+      State.highlights = [];
       try {
         let data = null;
         if (hasShell && State.path) data = await window.margin.loadNotes(State.path);
@@ -1166,6 +1190,7 @@
         }
         if (data && Array.isArray(data.notes)) {
           if (data.scale) State.scale = data.scale;
+          if (Array.isArray(data.highlights)) State.highlights = data.highlights;
           return data.notes;
         }
       } catch (e) { }
@@ -1529,6 +1554,10 @@
       return State.notes.filter(n => n.page === page).sort((a, b) => a.y - b.y);
     }
 
+    function highlightsOn(page) {
+      return State.highlights.filter(h => h.page === page);
+    }
+
     function layoutPage(p) {
       const focused = document.activeElement;
       const memo = focused && focused.classList.contains('note-src')
@@ -1572,6 +1601,26 @@
         p.bitmap, 0, Math.round(y0 * p.bitmap.height), p.bitmap.width,
         Math.round((y1 - y0) * p.bitmap.height), 0, 0, c.width, c.height);
       wrap.appendChild(c);
+
+      for (const hl of highlightsOn(p.num)) {
+        const top = Math.max(hl.y0, y0), bottom = Math.min(hl.y1, y1);
+        if (bottom <= top) continue;
+        const el = document.createElement('div');
+        el.className = 'highlight';
+        el.style.left = (hl.x0 * 100) + '%';
+        el.style.width = ((hl.x1 - hl.x0) * 100) + '%';
+        el.style.top = (((top - y0) / (y1 - y0)) * 100) + '%';
+        el.style.height = (((bottom - top) / (y1 - y0)) * 100) + '%';
+        el.title = 'Click to remove highlight';
+        el.addEventListener('mousedown', e => e.stopPropagation());
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          State.highlights = State.highlights.filter(x => x.id !== hl.id);
+          layoutPage(p); scheduleSave();
+        });
+        wrap.appendChild(el);
+      }
+
       const guide = document.createElement('div');
       guide.className = 'guide'; wrap.appendChild(guide);
       wrap.addEventListener('mousemove', e => {
@@ -1587,6 +1636,47 @@
         const local = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
         splitAt({ page: p.num, y: y0 + local * (y1 - y0), x: (e.clientX - r.left) / r.width });
       });
+
+      // plain click-drag = highlighter; Ctrl/Cmd is reserved for splitting a note above
+      wrap.addEventListener('mousedown', e => {
+        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        const r = wrap.getBoundingClientRect();
+        const startX = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+        const startY = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        const preview = document.createElement('div');
+        preview.className = 'highlight-preview';
+        wrap.appendChild(preview);
+        let moved = false;
+        const onMove = ev => {
+          const x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+          const y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+          if (Math.abs(x - startX) * r.width > 3 || Math.abs(y - startY) * r.height > 3) moved = true;
+          const x0 = Math.min(x, startX), x1 = Math.max(x, startX);
+          const y0l = Math.min(y, startY), y1l = Math.max(y, startY);
+          preview.style.left = (x0 * 100) + '%'; preview.style.width = ((x1 - x0) * 100) + '%';
+          preview.style.top = (y0l * 100) + '%'; preview.style.height = ((y1l - y0l) * 100) + '%';
+        };
+        const onUp = ev => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          preview.remove();
+          if (!moved) return; // a plain click, not a drag — no-op, same as before
+          const x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+          const y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+          State.highlights.push({
+            id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            page: p.num,
+            x0: Math.min(x, startX), x1: Math.max(x, startX),
+            y0: y0 + Math.min(y, startY) * (y1 - y0),
+            y1: y0 + Math.max(y, startY) * (y1 - y0)
+          });
+          layoutPage(p); scheduleSave();
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+
       return wrap;
     }
 
