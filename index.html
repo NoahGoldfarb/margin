@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Margin</title>
+  <style>
+    :root {
+      --ink: #151A22;
+      /* app chrome */
+      --ink-2: #1E2530;
+      /* raised chrome */
+      --rule: #2C3644;
+      --chrome-text: #AEB8C7;
+      --chrome-dim: #6C7787;
+      --paper: #FFFFFF;
+      /* pdf page */
+      --note: #FBF8F1;
+      /* note strip */
+      --note-text: #1B2029;
+      --pen: #2F4CDB;
+      /* split guide, caret, focus */
+      --pen-soft: rgba(47, 76, 219, .18);
+      --danger: #B23B3B;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      --serif: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
+      --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0
+    }
+
+    body {
+      background: var(--ink);
+      color: var(--chrome-text);
+      font-family: var(--sans);
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* ---------- top bar ---------- */
+    #bar {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 12px;
+      background: var(--ink);
+      border-bottom: 1px solid var(--rule);
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    #bar button,
+    #bar .chip {
+      -webkit-app-region: no-drag
+    }
+
+    #docname {
+      color: #E6EBF2;
+      font-weight: 500;
+      max-width: 44vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    #bar .spacer {
+      flex: 1
+    }
+
+    #bar .meta {
+      color: var(--chrome-dim);
+      font-variant-numeric: tabular-nums
+    }
+
+    .chip {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      color: var(--chrome-text);
+      border-radius: 5px;
+      padding: 3px 8px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .chip:hover {
+      border-color: #455266;
+      color: #E6EBF2
+    }
+
+    .chip kbd {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #E6EBF2
+    }
+
+
+    :focus-visible {
+      outline: 2px solid var(--pen);
+      outline-offset: 2px
+    }
+
+    /* ---------- viewer ---------- */
+    #surface {
+      position: absolute;
+      top: 34px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow-y: auto;
+      scroll-behavior: auto;
+      padding: 18px 0 55vh;
+    }
+
+    .page {
+      position: relative;
+      margin: 0 auto 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .slice {
+      position: relative;
+      background: var(--paper);
+      display: block;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 8px 22px rgba(0, 0, 0, .35);
+    }
+
+    .slice canvas {
+      display: block
+    }
+
+    .slice.top-half {
+      box-shadow: 0 -1px 0 rgba(0, 0, 0, .5), 0 -6px 18px rgba(0, 0, 0, .25)
+    }
+
+    .guide {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 1px solid var(--pen);
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .slice:hover .guide {
+      opacity: .55
+    }
+
+    .guide::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: -3px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--pen);
+    }
+
+    .pagenum {
+      position: absolute;
+      left: -42px;
+      top: 2px;
+      color: var(--chrome-dim);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+
+    .placeholder {
+      background: #20262F;
+      border: 1px solid var(--rule)
+    }
+
+    /* ---------- note ---------- */
+    .note {
+      background: var(--note);
+      color: var(--note-text);
+      border-left: 3px solid var(--pen);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .note.is-editing {
+      border-left-color: #0F2ABF
+    }
+
+    .note-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 10px;
+      border-bottom: 1px solid #E7E1D4;
+      color: #7A7264;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .note-head .grow {
+      flex: 1
+    }
+
+    .note-head button {
+      border: 0;
+      background: none;
+      color: #7A7264;
+      cursor: pointer;
+      font: inherit;
+      padding: 2px 4px;
+    }
+
+    .note-head button:hover {
+      color: var(--danger)
+    }
+
+    .note-body {
+      display: block;
+      min-height: 44px;
+      padding: 7px 12px 9px
+    }
+
+    .note-editor {
+      font-family: var(--serif);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--note-text)
+    }
+
+    .note-render {
+      min-height: 1.5em;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      cursor: text
+    }
+
+    .note-src {
+      display: block;
+      width: 100%;
+      min-height: 92px;
+      border: 0;
+      resize: none;
+      outline: none;
+      background: rgba(47, 76, 219, .07);
+      border-radius: 3px;
+      color: #2A2F3A;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 2px 4px;
+      overflow: hidden;
+      caret-color: var(--pen)
+    }
+
+    .note-src[hidden] {
+      display: none
+    }
+
+    .note-src::placeholder {
+      color: #B6AE9E
+    }
+
+    .note-render>*:first-child {
+      margin-top: 0
+    }
+
+    .note-render>*:last-child {
+      margin-bottom: 0
+    }
+
+    .note-render p,
+    .note-render ul,
+    .note-render ol {
+      margin: .35em 0
+    }
+
+    .note-render h1,
+    .note-render h2,
+    .note-render h3 {
+      font-size: 1.05em;
+      margin: .5em 0 .2em
+    }
+
+    .note-render code {
+      font-family: var(--mono);
+      font-size: .85em;
+      background: #F0EADC;
+      padding: 1px 4px;
+      border-radius: 3px
+    }
+
+    .note-render pre {
+      background: #F0EADC;
+      padding: 8px 10px;
+      overflow-x: auto;
+      border-radius: 4px
+    }
+
+    .note-render pre code {
+      background: none;
+      padding: 0
+    }
+
+    .note-render blockquote {
+      margin: .4em 0;
+      padding-left: .8em;
+      border-left: 2px solid #DCD4C2;
+      color: #5C5648
+    }
+
+    .note-render table {
+      border-collapse: collapse
+    }
+
+    .note-render td,
+    .note-render th {
+      border: 1px solid #DCD4C2;
+      padding: 2px 7px
+    }
+
+    .note-render .katex-display {
+      margin: .45em 0
+    }
+
+    /* ---------- overlays ---------- */
+    #drop {
+      position: absolute;
+      inset: 34px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 18px;
+      text-align: center;
+      padding: 40px;
+    }
+
+    #drop h1 {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 30px;
+      color: #E6EBF2;
+      margin: 0
+    }
+
+    #drop p {
+      margin: 0;
+      color: var(--chrome-dim);
+      max-width: 46ch;
+      line-height: 1.6
+    }
+
+    #drop.hidden,
+    #help.hidden {
+      display: none
+    }
+
+    body.dragging #drop {
+      background: var(--pen-soft)
+    }
+
+    #help {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 13, 18, .86);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #help .card {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 22px 26px;
+      max-width: 560px;
+      width: 90%;
+    }
+
+    #help h2 {
+      margin: 0 0 14px;
+      font-family: var(--serif);
+      font-weight: 400;
+      color: #E6EBF2;
+      font-size: 20px
+    }
+
+    #help dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 7px 18px;
+      margin: 0
+    }
+
+    #help dt {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #E6EBF2;
+      white-space: nowrap
+    }
+
+    #help dd {
+      margin: 0;
+      color: var(--chrome-text)
+    }
+
+    #latex-settings {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 13, 18, .86)
+    }
+
+    #latex-settings.hidden { display: none }
+
+    #latex-settings .card {
+      width: min(720px, 92vw);
+      max-height: 86vh;
+      overflow: auto;
+      padding: 22px 26px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px
+    }
+
+    #latex-settings h2 {
+      margin: 0 0 6px;
+      color: #E6EBF2;
+      font-family: var(--serif);
+      font-weight: 400
+    }
+
+    #latex-settings p { margin: 0 0 16px; line-height: 1.5 }
+
+    .snippet-row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 8px;
+      margin: 8px 0
+    }
+
+    .snippet-row input {
+      min-width: 0;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 7px 8px;
+      background: var(--ink);
+      color: #E6EBF2;
+      font: 13px var(--mono)
+    }
+
+    .snippet-row button,
+    #snippet-add, #snippet-reset, #snippet-close {
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 6px 9px;
+      background: var(--ink);
+      color: var(--chrome-text);
+      cursor: pointer;
+      font: inherit
+    }
+
+    .snippet-row button:hover,
+    #snippet-add:hover, #snippet-reset:hover, #snippet-close:hover {
+      border-color: #455266;
+      color: #E6EBF2
+    }
+
+    .snippet-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px
+    }
+
+    @media (max-width: 620px) {
+      .snippet-row { grid-template-columns: 1fr auto }
+      .snippet-row input:nth-child(2) { grid-column: 1 / -1; grid-row: 2 }
+    }
+
+    #toast {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 7px 14px;
+      opacity: 0;
+      transition: opacity .18s;
+      pointer-events: none;
+      z-index: 30;
+    }
+
+    #toast.show {
+      opacity: 1
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      * {
+        transition: none !important
+      }
+    }
+
+    @media (max-width:820px) {
+      .note-body {
+        padding-left: 10px;
+        padding-right: 10px
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="bar">
+    <span id="docname">No PDF open</span>
+    <span class="meta" id="pageinfo"></span>
+    <span class="spacer"></span>
+    <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
+    <button class="chip" id="latexbtn">LaTeX</button>
+    <button class="chip" id="openbtn">Open <kbd>⌃O</kbd></button>
+    <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
+  </div>
+
+  <div id="surface" tabindex="0">
+    <div id="drop">
+      <h1>Drop a lecture PDF here</h1>
+      <p>Ctrl-click anywhere on a page. The page opens at that
+        exact line and a note starts there, in Markdown with LaTeX.</p>
+      <p><button class="chip" id="openbtn2">Open a PDF</button></p>
+    </div>
+    <div id="pages"></div>
+  </div>
+
+  <div id="help" class="hidden">
+    <div class="card">
+      <h2>Keys</h2>
+      <dl>
+        <dt>Ctrl-click</dt>
+        <dd>Split the page where you click and start a note there</dd>
+        <dt>Esc</dt>
+        <dd>Leave the note and go back to the page (deletes it if empty)</dd>
+        <dt>Alt+↑ / Alt+↓</dt>
+        <dd>Jump to the previous or next note</dd>
+        <dt>LaTeX</dt>
+        <dd>Configure snippets such as <code>mk</code> and <code>frac</code></dd>
+        <dt>Ctrl+Shift+⌫</dt>
+        <dd>Delete the note you are in</dd>
+        <dt>Ctrl+O</dt>
+        <dd>Open a PDF</dd>
+        <dt>Ctrl+= / Ctrl+- / Ctrl+0</dt>
+        <dd>Zoom in, out, reset</dd>
+        <dt>Ctrl+E</dt>
+        <dd>Export notes as a Markdown file</dd>
+        <dt>?</dt>
+        <dd>Show this list</dd>
+      </dl>
+      <p style="color:var(--chrome-dim);margin:16px 0 0;line-height:1.6">
+        Math goes in <code style="font-family:var(--mono)">$…$</code> or
+        <code style="font-family:var(--mono)">$$…$$</code>. Everything saves as you type.
+        Type <code style="font-family:var(--mono)">mk</code> or
+        <code style="font-family:var(--mono)">frac</code> followed by Tab for a LaTeX snippet.
+      </p>
+    </div>
+  </div>
+
+  <div id="latex-settings" class="hidden">
+    <div class="card">
+      <h2>LaTeX Suite snippets</h2>
+      <p>Type a trigger at the end of a note and press Tab. Use <code>$0</code>,
+        <code>$1</code>, <code>$2</code> for Tab positions. Changes save automatically.</p>
+      <div class="snippet-row">
+        <strong>Trigger</strong><strong>Template</strong><span></span>
+      </div>
+      <div id="snippet-list"></div>
+      <div class="snippet-actions">
+        <button id="snippet-add">Add snippet</button>
+        <button id="snippet-reset">Reset defaults</button>
+        <button id="snippet-close">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <input type="file" id="filepick" accept="application/pdf" hidden>
+
+  <script>
+    /* ------------------------------------------------------------------ *
+     *  dependency loading: prefer vendor/ (offline), fall back to CDN
+     * ------------------------------------------------------------------ */
+    const DEPS = {
+      pdf: ['vendor/pdf.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'],
+      marked: ['vendor/marked.min.js',
+        'https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js'],
+      katex: ['vendor/katex.min.js',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'],
+      auto: ['vendor/auto-render.min.js',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js'],
+      css: ['vendor/katex.min.css',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css']
+    };
+    function loadScript(urls) {
+      return new Promise((resolve, reject) => {
+        let i = 0;
+        (function next() {
+          if (i >= urls.length) return reject(new Error('could not load ' + urls[0]));
+          const url = urls[i++], s = document.createElement('script');
+          s.src = url; s.onload = () => resolve(url); s.onerror = next;
+          document.head.appendChild(s);
+        })();
+      });
+    }
+    function loadCss(urls) {
+      return new Promise(resolve => {
+        let i = 0;
+        (function next() {
+          if (i >= urls.length) return resolve(null);
+          const l = document.createElement('link');
+          l.rel = 'stylesheet'; l.href = urls[i++];
+          l.onload = () => resolve(l.href); l.onerror = next;
+          document.head.appendChild(l);
+        })();
+      });
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  state
+     * ------------------------------------------------------------------ */
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const State = {
+      doc: null, path: null, key: null, name: '',
+      notes: [],                 // {id,page,y,x,md,collapsed}
+      pages: [],                 // {num,el,w,h,bitmap,rendered,rendering}
+      scale: 1.25,
+      hover: null,               // {page,y,x}
+    };
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    const $ = s => document.querySelector(s);
+    const surface = $('#surface'), pagesEl = $('#pages');
+
+    const DEFAULT_SNIPPETS = [
+      { trigger: 'mk', template: '$0$' },
+      { trigger: 'dm', template: '$$\n$0\n$$' },
+      { trigger: 'frac', template: '\\frac{$0}{$1}' },
+      { trigger: 'sq', template: '^{2}$0' },
+      { trigger: 'sr', template: '\\sqrt{$0}' },
+      { trigger: '->', template: '\\to $0' }
+    ];
+    let snippets = loadSnippets();
+
+    function loadSnippets() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('margin:latex-snippets'));
+        if (Array.isArray(saved)) {
+          const result = saved.filter(x => x && x.trigger && typeof x.template === 'string');
+          const frac = result.find(x => x.trigger === 'frac');
+          if (frac && frac.template === '\\frac{$0}{}') frac.template = '\\frac{$0}{$1}';
+          return result;
+        }
+      } catch (e) { }
+      return DEFAULT_SNIPPETS.map(x => ({ ...x }));
+    }
+
+    function saveSnippets() {
+      localStorage.setItem('margin:latex-snippets', JSON.stringify(snippets));
+    }
+
+    function expandSnippet(source, typedSpace) {
+      const value = source.value;
+      const cursorPosition = source.selectionStart;
+      const prefix = value.slice(0, cursorPosition);
+      const ending = typedSpace && prefix.endsWith(' ') ? prefix.slice(0, -1) : prefix;
+      const inMath = isMathMode(ending);
+      const boundary = inMath ? '(?:^|[^A-Za-z])' : '(?:^|\\s|\\d)';
+      const match = snippets
+        .filter(x => x.trigger)
+        .sort((a, b) => b.trigger.length - a.trigger.length)
+        .find(x => {
+          if (inMath && /(^|[^\\$])\${1,2}(?!\d)/.test(x.template)) return false;
+          return new RegExp(`${boundary}${escapeRegExp(x.trigger)}$`).test(ending);
+        });
+      if (!match) return false;
+      const start = ending.length - match.trigger.length;
+      const before = ending.slice(0, start);
+      const suffix = value.slice(cursorPosition);
+      const stops = [];
+      const replacement = match.template.replace(/\$(\d+)/g, (_, number) => {
+        stops.push({ number: Number(number), offset: 0 });
+        return '';
+      });
+      let offset = 0;
+      match.template.replace(/\$(\d+)/g, (_, number, position) => {
+        const stop = stops.find(item => item.number === Number(number) && item.offset === 0);
+        if (stop) stop.offset = position - [...match.template.slice(0, position).matchAll(/\$(\d+)/g)].reduce((sum, item) => sum + item[0].length, 0);
+        return '';
+      });
+      stops.sort((a, b) => a.number - b.number);
+      source.value = before + replacement + suffix;
+      source._snippetStops = stops.map(stop => before.length + stop.offset);
+      source._snippetIndex = 0;
+      const position = source._snippetStops[0] ?? before.length + replacement.length;
+      source.setSelectionRange(position, position);
+      source._snippetValue = source.value;
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      autoGrow(source);
+      return true;
+    }
+
+    function updateSnippetStops(source) {
+      if (!source._snippetStops || source._snippetValue == null) return;
+      const delta = source.value.length - source._snippetValue.length;
+      if (delta) {
+        const editStart = delta > 0 ? source.selectionStart - delta : source.selectionStart;
+        source._snippetStops = source._snippetStops.map((stop, index) => {
+          if (index !== source._snippetIndex && stop >= editStart) return stop + delta;
+          return stop;
+        });
+      }
+      source._snippetValue = source.value;
+    }
+
+    function moveSnippetTab(source) {
+      if (!source._snippetStops || source._snippetIndex >= source._snippetStops.length) return false;
+      source._snippetIndex++;
+      if (source._snippetIndex < source._snippetStops.length) {
+        const position = source._snippetStops[source._snippetIndex];
+        source.setSelectionRange(position, position);
+      } else {
+        source._snippetStops = null;
+      }
+      return true;
+    }
+
+    function isMathMode(value) {
+      let dollars = 0;
+      for (let i = 0; i < value.length; i++) {
+        if (value[i] === '$' && value[i - 1] !== '\\') dollars++;
+      }
+      const inlineOpen = value.lastIndexOf('\\(') > value.lastIndexOf('\\)');
+      const displayOpen = value.lastIndexOf('\\[') > value.lastIndexOf('\\]');
+      return dollars % 2 === 1 || inlineOpen || displayOpen;
+    }
+
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function paintSnippetSettings() {
+      const list = $('#snippet-list');
+      list.innerHTML = '';
+      snippets.forEach((snippet, index) => {
+        const row = document.createElement('div'); row.className = 'snippet-row';
+        const trigger = document.createElement('input'); trigger.value = snippet.trigger; trigger.placeholder = 'trigger';
+        const template = document.createElement('input'); template.value = snippet.template; template.placeholder = 'template';
+        const remove = document.createElement('button'); remove.textContent = 'Remove';
+        trigger.oninput = () => { snippet.trigger = trigger.value; saveSnippets(); };
+        template.oninput = () => { snippet.template = template.value; saveSnippets(); };
+        remove.onclick = () => { snippets.splice(index, 1); saveSnippets(); paintSnippetSettings(); };
+        row.append(trigger, template, remove); list.appendChild(row);
+      });
+    }
+
+    $('#latexbtn').onclick = () => {
+      paintSnippetSettings();
+      $('#latex-settings').classList.remove('hidden');
+    };
+    $('#snippet-close').onclick = () => $('#latex-settings').classList.add('hidden');
+    $('#snippet-add').onclick = () => {
+      snippets.push({ trigger: '', template: '$0' });
+      paintSnippetSettings();
+      $('#snippet-list input').focus();
+      saveSnippets();
+    };
+    $('#snippet-reset').onclick = () => {
+      snippets = DEFAULT_SNIPPETS.map(x => ({ ...x }));
+      saveSnippets(); paintSnippetSettings();
+    };
+    $('#latex-settings').onclick = e => {
+      if (e.target.id === 'latex-settings') $('#latex-settings').classList.add('hidden');
+    };
+
+    /* ------------------------------------------------------------------ *
+     *  markdown + latex
+     * ------------------------------------------------------------------ */
+    // Pull math out before Markdown runs, so `$x_i$` and `\\` survive intact.
+    const MATH_RE = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?!\s)(?:\\.|[^$\\\n])+?\$(?!\d))/g;
+    const CODE_RE = /(```[\s\S]*?```|`[^`\n]*`)/g;
+
+    function renderMarkdown(src, target) {
+      const code = [], math = [];
+      let s = src.replace(CODE_RE, m => (code.push(m), `\u0000C${code.length - 1}\u0000`));
+      s = s.replace(MATH_RE, m => (math.push(m), `\u0000M${math.length - 1}\u0000`));
+      s = s.replace(/\u0000C(\d+)\u0000/g, (_, i) => code[+i]);
+      let html = window.marked ? marked.parse(s, { breaks: true, gfm: true }) : escapeHtml(s);
+      html = html.replace(/\u0000M(\d+)\u0000/g, (_, i) => escapeHtml(math[+i]));
+      target.innerHTML = html;
+      if (window.renderMathInElement) {
+        try {
+          renderMathInElement(target, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\[', right: '\\]', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false, errorColor: '#B23B3B'
+          });
+        } catch (e) {/* leave raw source visible */ }
+      }
+    }
+    function escapeHtml(s) {
+      return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  persistence — sidecar file in Electron, localStorage in a browser
+     * ------------------------------------------------------------------ */
+    const hasShell = !!window.margin;
+    let saveTimer = null;
+    function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
+    async function saveNow() {
+      if (!State.key) return;
+      const payload = { version: 1, pdf: State.name, scale: State.scale, notes: State.notes };
+      try {
+        if (hasShell && State.path) await window.margin.saveNotes(State.path, payload);
+        else localStorage.setItem('margin:' + State.key, JSON.stringify(payload));
+      } catch (e) { toast('Notes could not be saved: ' + e.message); }
+    }
+    async function loadNotes() {
+      try {
+        let data = null;
+        if (hasShell && State.path) data = await window.margin.loadNotes(State.path);
+        else {
+          const raw = localStorage.getItem('margin:' + State.key);
+          data = raw ? JSON.parse(raw) : null;
+        }
+        if (data && Array.isArray(data.notes)) {
+          if (data.scale) State.scale = data.scale;
+          return data.notes;
+        }
+      } catch (e) { }
+      return [];
+    }
+    function fingerprint(bytes) {
+      let h = 0x811c9dc5;
+      const n = Math.min(bytes.length, 262144);
+      for (let i = 0; i < n; i++) { h ^= bytes[i]; h = (h * 0x01000193) >>> 0; }
+      return bytes.length.toString(36) + '-' + h.toString(36);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  opening a document
+     * ------------------------------------------------------------------ */
+    async function openBytes(bytes, name, path) {
+      State.name = name || 'document.pdf'; State.path = path || null;
+      State.key = path || fingerprint(bytes);
+      State.doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+      State.notes = await loadNotes();
+      $('#docname').textContent = State.name;
+      $('#drop').classList.add('hidden');
+      await buildPages();
+      surface.focus();
+      const n = State.notes.length;
+      toast(n ? `${n} note${n > 1 ? 's' : ''} restored` : `${State.doc.numPages} pages ready`);
+    }
+    async function pickFile() {
+      if (hasShell) {
+        const f = await window.margin.openPdf();
+        if (f) openBytes(f.bytes, f.name, f.path);
+      } else $('#filepick').click();
+    }
+    $('#filepick').addEventListener('change', async e => {
+      const f = e.target.files[0]; if (!f) return;
+      const buf = new Uint8Array(await f.arrayBuffer());
+      openBytes(buf, f.name, null);
+      e.target.value = '';
+    });
+
+    /* ------------------------------------------------------------------ *
+     *  page layout — pages are sliced at every note position
+     * ------------------------------------------------------------------ */
+    let io = null;
+    async function buildPages() {
+      pagesEl.innerHTML = ''; State.pages = [];
+      if (io) io.disconnect();
+      const first = await State.doc.getPage(1);
+      const fv = first.getViewport({ scale: State.scale });
+      for (let n = 1; n <= State.doc.numPages; n++) {
+        const el = document.createElement('div');
+        el.className = 'page'; el.dataset.page = n;
+        el.style.width = fv.width + 'px';
+        const ph = document.createElement('div');
+        ph.className = 'slice placeholder';
+        ph.style.width = fv.width + 'px'; ph.style.height = fv.height + 'px';
+        el.appendChild(ph);
+        const label = document.createElement('div');
+        label.className = 'pagenum'; label.textContent = n;
+        el.appendChild(label);
+        pagesEl.appendChild(el);
+        State.pages.push({ num: n, el, rendered: false, rendering: false, w: fv.width, h: fv.height });
+      }
+      io = new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (e.isIntersecting) renderPage(State.pages[+e.target.dataset.page - 1]);
+        }
+      }, { root: surface, rootMargin: '900px 0px' });
+      State.pages.forEach(p => io.observe(p.el));
+      updatePageInfo();
+    }
+
+    async function renderPage(p) {
+      if (p.rendered || p.rendering) return;
+      p.rendering = true;
+      const pg = await State.doc.getPage(p.num);
+      const vp = pg.getViewport({ scale: State.scale * DPR });
+      const c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext('2d', { alpha: false }), viewport: vp }).promise;
+      p.bitmap = c; p.w = vp.width / DPR; p.h = vp.height / DPR;
+      p.rendered = true; p.rendering = false;
+      layoutPage(p);
+    }
+
+    function notesOn(page) {
+      return State.notes.filter(n => n.page === page).sort((a, b) => a.y - b.y);
+    }
+
+    function layoutPage(p) {
+      const focused = document.activeElement;
+      const memo = focused && focused.classList.contains('note-src')
+        ? {
+          id: focused.closest('.note').dataset.id,
+          start: focused.selectionStart, end: focused.selectionEnd
+        } : null;
+
+      p.el.style.width = p.w + 'px';
+      const label = p.el.querySelector('.pagenum');
+      p.el.innerHTML = ''; if (label) p.el.appendChild(label);
+
+      if (!p.rendered) {
+        const ph = document.createElement('div');
+        ph.className = 'slice placeholder';
+        ph.style.width = p.w + 'px'; ph.style.height = p.h + 'px';
+        p.el.appendChild(ph);
+        return;
+      }
+      const marks = notesOn(p.num);
+      const cuts = [0, ...marks.map(n => n.y), 1];
+      for (let i = 0; i < cuts.length - 1; i++) {
+        const y0 = cuts[i], y1 = cuts[i + 1];
+        if (y1 - y0 > 0.0005) p.el.appendChild(makeSlice(p, y0, y1));
+        if (i < marks.length) p.el.appendChild(noteEl(marks[i]));
+      }
+      if (memo) {
+        const ta = p.el.querySelector(`.note[data-id="${memo.id}"] .note-src`);
+        if (ta) { ta.focus(); ta.setSelectionRange(memo.start, memo.end); }
+      }
+    }
+
+    function makeSlice(p, y0, y1) {
+      const wrap = document.createElement('div');
+      wrap.className = 'slice' + (y1 < 1 ? ' top-half' : '');
+      const h = Math.round((y1 - y0) * p.h);
+      const c = document.createElement('canvas');
+      c.width = Math.round(p.w * DPR); c.height = Math.round(h * DPR);
+      c.style.width = p.w + 'px'; c.style.height = h + 'px';
+      c.getContext('2d').drawImage(
+        p.bitmap, 0, Math.round(y0 * p.bitmap.height), p.bitmap.width,
+        Math.round((y1 - y0) * p.bitmap.height), 0, 0, c.width, c.height);
+      wrap.appendChild(c);
+      const guide = document.createElement('div');
+      guide.className = 'guide'; wrap.appendChild(guide);
+      wrap.addEventListener('mousemove', e => {
+        const r = wrap.getBoundingClientRect();
+        const local = (e.clientY - r.top) / r.height;
+        guide.style.top = (e.clientY - r.top) + 'px';
+        State.hover = { page: p.num, y: y0 + local * (y1 - y0), x: (e.clientX - r.left) / r.width };
+      });
+      wrap.addEventListener('click', e => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        const r = wrap.getBoundingClientRect();
+        const local = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        splitAt({ page: p.num, y: y0 + local * (y1 - y0), x: (e.clientX - r.left) / r.width });
+      });
+      return wrap;
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  notes
+     * ------------------------------------------------------------------ */
+    function noteEl(note) {
+      const el = document.createElement('div');
+      el.className = 'note';
+      el.dataset.id = note.id;
+      el.style.width = '100%';
+
+      const head = document.createElement('div');
+      head.className = 'note-head';
+      head.innerHTML = `<span>page ${note.page} · ${Math.round(note.y * 100)}%</span>
+    <span class="grow"></span>`;
+      const del = document.createElement('button');
+      del.textContent = 'delete'; del.title = 'Delete this note';
+      del.onclick = () => deleteNote(note.id);
+      head.appendChild(del);
+
+      const body = document.createElement('div'); body.className = 'note-body';
+      el.append(head, body);
+
+      const source = document.createElement('textarea');
+      source.className = 'note-src'; source.value = note.md || ''; source.spellcheck = false;
+      source.placeholder = 'Markdown and $\\LaTeX$…';
+      const rendered = document.createElement('div'); rendered.className = 'note-render';
+      body.append(source, rendered);
+      const finish = () => {
+        note.md = source.value;
+        renderMarkdown(note.md, rendered);
+        source.hidden = true;
+        rendered.hidden = false;
+        el.classList.remove('is-editing');
+        scheduleSave();
+      };
+      const edit = () => {
+        source.hidden = false;
+        rendered.hidden = true;
+        el.classList.add('is-editing');
+        source.focus();
+        source.setSelectionRange(source.value.length, source.value.length);
+        autoGrow(source);
+      };
+      source.addEventListener('input', () => {
+        note.md = source.value; updateSnippetStops(source); autoGrow(source); scheduleSave();
+      });
+      source.addEventListener('blur', finish);
+      source.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          if (moveSnippetTab(source) || expandSnippet(source, false)) return;
+          source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
+          source.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault(); finish(); surface.focus();
+        }
+      });
+      rendered.addEventListener('click', edit);
+      source.hidden = true;
+      renderMarkdown(note.md || '', rendered);
+      return el;
+    }
+
+    function autoGrow(ta) {
+      ta.style.height = 'auto';
+      ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
+    }
+
+    function splitAt(h) {
+      if (!h) { toast('Ctrl-click a page to add a note'); return; }
+      const note = {
+        id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        page: h.page, y: +h.y.toFixed(5), x: +h.x.toFixed(3), md: '', collapsed: false
+      };
+      State.notes.push(note);
+      layoutPage(State.pages[h.page - 1]);
+      scheduleSave();
+      const noteEl = document.querySelector(`.note[data-id="${note.id}"]`);
+      if (noteEl) {
+        noteEl.querySelector('.note-render').click();
+        const ta = noteEl.querySelector('.note-src');
+        const r = ta.getBoundingClientRect();
+        if (r.bottom > window.innerHeight - 40 || r.top < 60)
+          ta.scrollIntoView({ block: 'center' });
+      }
+    }
+
+    function deleteNote(id) {
+      const n = State.notes.find(x => x.id === id); if (!n) return;
+      State.notes = State.notes.filter(x => x.id !== id);
+      layoutPage(State.pages[n.page - 1]);
+      surface.focus(); scheduleSave();
+    }
+
+    async function hopNote(dir, fromId) {
+      const all = [...State.notes].sort((a, b) => a.page - b.page || a.y - b.y);
+      if (!all.length) return;
+      let i = all.findIndex(n => n.id === fromId);
+      i = i < 0 ? (dir > 0 ? 0 : all.length - 1) : i + dir;
+      if (i < 0 || i >= all.length) return;
+      const target = all[i];
+      const p = State.pages[target.page - 1];
+      await renderPage(p);
+      const noteEl = document.querySelector(`.note[data-id="${target.id}"]`);
+      if (noteEl) {
+        noteEl.querySelector('.note-render').click();
+        noteEl.querySelector('.note-src').scrollIntoView({ block: 'center' });
+      }
+      else p.el.scrollIntoView({ block: 'start' });
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  global keys
+     * ------------------------------------------------------------------ */
+    window.addEventListener('keydown', e => {
+      const inEditor = e.target.classList && e.target.classList.contains('note-src');
+      const mod = e.ctrlKey || e.metaKey;
+
+      if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickFile(); return; }
+      if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); exportMarkdown(); return; }
+      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); toast('Saved'); return; }
+      if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoom(1.15); return; }
+      if (mod && e.key === '-') { e.preventDefault(); zoom(1 / 1.15); return; }
+      if (mod && e.key === '0') { e.preventDefault(); zoom(null); return; }
+
+      if (!inEditor) {
+        if (e.key === '?') { e.preventDefault(); $('#help').classList.toggle('hidden'); return; }
+        if (e.key === 'Escape') { $('#help').classList.add('hidden'); return; }
+        if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault(); hopNote(e.key === 'ArrowDown' ? 1 : -1, null); return;
+        }
+      }
+    }, true);
+
+    $('#openbtn').onclick = pickFile;
+    $('#openbtn2').onclick = pickFile;
+    $('#helpbtn').onclick = () => $('#help').classList.toggle('hidden');
+    $('#help').onclick = e => { if (e.target.id === 'help') $('#help').classList.add('hidden'); };
+
+    function zoom(f) {
+      if (!State.doc) return;
+      State.scale = f ? Math.min(3, Math.max(.5, State.scale * f)) : 1.25;
+      State.pages.forEach(p => { p.rendered = false; p.bitmap = null; });
+      buildPages(); scheduleSave();
+    }
+
+    surface.addEventListener('scroll', updatePageInfo, { passive: true });
+    function updatePageInfo() {
+      if (!State.doc) return;
+      const mid = surface.scrollTop + surface.clientHeight / 3;
+      let cur = 1;
+      for (const p of State.pages) { if (p.el.offsetTop <= mid) cur = p.num; else break; }
+      $('#pageinfo').textContent = `${cur} / ${State.doc.numPages} · ${State.notes.length} notes`;
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  drag & drop, export, toast
+     * ------------------------------------------------------------------ */
+    window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging'); });
+    window.addEventListener('dragleave', () => document.body.classList.remove('dragging'));
+    window.addEventListener('drop', async e => {
+      e.preventDefault(); document.body.classList.remove('dragging');
+      const f = e.dataTransfer.files[0]; if (!f || !/\.pdf$/i.test(f.name)) return;
+      const path = hasShell ? window.margin.pathFor(f) : null;
+      openBytes(new Uint8Array(await f.arrayBuffer()), f.name, path);
+    });
+
+    function exportMarkdown() {
+      if (!State.doc) return;
+      const lines = [`# Notes — ${State.name}`, ''];
+      [...State.notes].sort((a, b) => a.page - b.page || a.y - b.y).forEach(n => {
+        lines.push(`## p.${n.page}`, '', n.md.trim(), '');
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = State.name.replace(/\.pdf$/i, '') + '.md';
+      a.click(); URL.revokeObjectURL(a.href);
+      toast('Markdown exported');
+    }
+
+    let toastT = null;
+    function toast(msg) {
+      const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  boot
+     * ------------------------------------------------------------------ */
+    (async function boot() {
+      try {
+        const pdfUrl = await loadScript(DEPS.pdf);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfUrl.replace('pdf.min.js', 'pdf.worker.min.js');
+        await loadCss(DEPS.css);
+        await Promise.all([loadScript(DEPS.marked), loadScript(DEPS.katex)]);
+        await loadScript(DEPS.auto);
+      } catch (err) {
+        toast('Could not load the PDF and math libraries — check the network or run npm run vendor');
+      }
+      surface.focus();
+      if (hasShell && window.margin.argPath) {
+        const p = await window.margin.argPath();
+        if (p) { const f = await window.margin.readPdf(p); if (f) openBytes(f.bytes, f.name, f.path); }
+      }
+    })();
+  </script>
+</body>
+
+</html>
