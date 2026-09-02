@@ -25,6 +25,8 @@
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
       --serif: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
       --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+      --ease: cubic-bezier(.2, .8, .2, 1);
+      --fast: .12s;
     }
 
     * {
@@ -43,6 +45,34 @@
       font-family: var(--sans);
       font-size: 14px;
       overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* dark, unobtrusive scrollbars instead of the default light ones */
+    #surface::-webkit-scrollbar,
+    #tree::-webkit-scrollbar,
+    #latex-settings .card::-webkit-scrollbar {
+      width: 10px
+    }
+
+    #surface::-webkit-scrollbar-track,
+    #tree::-webkit-scrollbar-track,
+    #latex-settings .card::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    #surface::-webkit-scrollbar-thumb,
+    #tree::-webkit-scrollbar-thumb,
+    #latex-settings .card::-webkit-scrollbar-thumb {
+      background: var(--rule);
+      border-radius: 6px;
+      border: 2px solid var(--ink);
+    }
+
+    #surface::-webkit-scrollbar-thumb:hover,
+    #tree::-webkit-scrollbar-thumb:hover,
+    #latex-settings .card::-webkit-scrollbar-thumb:hover {
+      background: #3A4657
     }
 
     /* ---------- top bar ---------- */
@@ -90,11 +120,17 @@
       font: inherit;
       font-size: 12px;
       cursor: pointer;
+      transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease),
+        background var(--fast) var(--ease), transform var(--fast) var(--ease);
     }
 
     .chip:hover {
       border-color: #455266;
       color: #E6EBF2
+    }
+
+    .chip:active {
+      transform: scale(.96)
     }
 
     .chip kbd {
@@ -158,9 +194,17 @@
       border-radius: 4px;
     }
 
+    #sidebar-head button {
+      transition: color var(--fast) var(--ease), background var(--fast) var(--ease), transform var(--fast) var(--ease);
+    }
+
     #sidebar-head button:hover {
       color: #E6EBF2;
       background: var(--ink-2)
+    }
+
+    #sidebar-head button:active {
+      transform: scale(.9)
     }
 
     #tree {
@@ -173,12 +217,15 @@
       display: flex;
       align-items: center;
       gap: 5px;
-      padding: 3px 10px;
+      margin: 0 6px;
+      padding: 3px 8px;
+      border-radius: 5px;
       cursor: pointer;
       white-space: nowrap;
       color: var(--chrome-text);
       font-size: 12.5px;
       user-select: none;
+      transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
     }
 
     .tree-row:hover {
@@ -232,6 +279,8 @@
       padding: 4px;
       min-width: 150px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+      animation: modal-in .12s var(--ease);
+      transform-origin: top left;
     }
 
     .ctxmenu button {
@@ -246,6 +295,7 @@
       cursor: pointer;
       font: inherit;
       font-size: 12.5px;
+      transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
     }
 
     .ctxmenu button:hover {
@@ -261,6 +311,7 @@
       align-items: center;
       justify-content: center;
       background: rgba(10, 13, 18, .86);
+      animation: fade-in .12s var(--ease);
     }
 
     #prompt-modal.hidden {
@@ -273,6 +324,7 @@
       border-radius: 8px;
       padding: 20px 22px;
       width: min(420px, 90vw);
+      animation: modal-in .16s var(--ease);
     }
 
     #prompt-modal h2 {
@@ -292,6 +344,7 @@
       background: var(--ink);
       color: #E6EBF2;
       font: 13px var(--mono);
+      transition: border-color var(--fast) var(--ease);
     }
 
     #prompt-modal .actions {
@@ -309,11 +362,16 @@
       color: var(--chrome-text);
       cursor: pointer;
       font: inherit;
+      transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
     }
 
     #prompt-modal button.action:hover {
       border-color: #455266;
       color: #E6EBF2
+    }
+
+    #prompt-modal button.action:active {
+      transform: scale(.96)
     }
 
     /* ---------- viewer ---------- */
@@ -354,6 +412,7 @@
       min-height: calc(100vh - 34px - 60px);
       padding: 56px 64px;
       box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 8px 22px rgba(0, 0, 0, .35);
+      animation: fade-in .15s var(--ease);
     }
 
     .notefile-src,
@@ -373,7 +432,8 @@
       background: none;
       padding: 0;
       min-height: calc(100vh - 34px - 60px - 112px);
-      caret-color: var(--pen)
+      caret-color: var(--pen);
+      transition: height .08s var(--ease);
     }
 
     .notefile-render {
@@ -409,6 +469,7 @@
       background: var(--paper);
       display: block;
       box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 8px 22px rgba(0, 0, 0, .35);
+      animation: fade-in .15s var(--ease);
     }
 
     .slice canvas {
@@ -427,6 +488,7 @@
       border-top: 1px solid var(--pen);
       pointer-events: none;
       opacity: 0;
+      transition: opacity var(--fast) var(--ease);
     }
 
     .slice:hover .guide {
@@ -450,6 +512,7 @@
       mix-blend-mode: multiply;
       cursor: pointer;
       border-radius: 2px;
+      transition: background var(--fast) var(--ease);
     }
 
     .highlight:hover {
@@ -473,8 +536,42 @@
     }
 
     .placeholder {
-      background: #20262F;
-      border: 1px solid var(--rule)
+      background: linear-gradient(100deg, #20262F 40%, #262E3A 50%, #20262F 60%);
+      background-size: 250% 100%;
+      border: 1px solid var(--rule);
+      animation: shimmer 1.7s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 135% 0
+      }
+
+      100% {
+        background-position: -35% 0
+      }
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    @keyframes modal-in {
+      from {
+        opacity: 0;
+        transform: scale(.97) translateY(2px)
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0)
+      }
     }
 
     /* ---------- note ---------- */
@@ -485,6 +582,8 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
       display: flex;
       flex-direction: column;
+      animation: fade-in .15s var(--ease);
+      transition: border-left-color var(--fast) var(--ease);
     }
 
     .note.is-editing {
@@ -513,6 +612,7 @@
       cursor: pointer;
       font: inherit;
       padding: 2px 4px;
+      transition: color var(--fast) var(--ease);
     }
 
     .note-head button:hover {
@@ -554,7 +654,8 @@
       line-height: 1.55;
       padding: 2px 4px;
       overflow: hidden;
-      caret-color: var(--pen)
+      caret-color: var(--pen);
+      transition: height .08s var(--ease);
     }
 
     .note-src[hidden] {
@@ -672,6 +773,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      animation: fade-in .12s var(--ease);
     }
 
     #help .card {
@@ -681,6 +783,7 @@
       padding: 22px 26px;
       max-width: 560px;
       width: 90%;
+      animation: modal-in .16s var(--ease);
     }
 
     #help h2 {
@@ -717,7 +820,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(10, 13, 18, .86)
+      background: rgba(10, 13, 18, .86);
+      animation: fade-in .12s var(--ease);
     }
 
     #latex-settings.hidden { display: none }
@@ -729,7 +833,8 @@
       padding: 22px 26px;
       background: var(--ink-2);
       border: 1px solid var(--rule);
-      border-radius: 8px
+      border-radius: 8px;
+      animation: modal-in .16s var(--ease);
     }
 
     #latex-settings h2 {
@@ -755,7 +860,8 @@
       padding: 7px 8px;
       background: var(--ink);
       color: #E6EBF2;
-      font: 13px var(--mono)
+      font: 13px var(--mono);
+      transition: border-color var(--fast) var(--ease);
     }
 
     .snippet-row button,
@@ -766,13 +872,19 @@
       background: var(--ink);
       color: var(--chrome-text);
       cursor: pointer;
-      font: inherit
+      font: inherit;
+      transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
     }
 
     .snippet-row button:hover,
     #snippet-add:hover, #snippet-reset:hover, #snippet-close:hover {
       border-color: #455266;
       color: #E6EBF2
+    }
+
+    .snippet-row button:active,
+    #snippet-add:active, #snippet-reset:active, #snippet-close:active {
+      transform: scale(.96)
     }
 
     .snippet-actions {
@@ -791,24 +903,26 @@
       position: absolute;
       bottom: 16px;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, 6px);
       background: var(--ink-2);
       border: 1px solid var(--rule);
       border-radius: 6px;
       padding: 7px 14px;
       opacity: 0;
-      transition: opacity .18s;
+      transition: opacity .18s var(--ease), transform .18s var(--ease);
       pointer-events: none;
       z-index: 30;
     }
 
     #toast.show {
-      opacity: 1
+      opacity: 1;
+      transform: translate(-50%, 0);
     }
 
     @media (prefers-reduced-motion:reduce) {
       * {
-        transition: none !important
+        transition: none !important;
+        animation: none !important;
       }
     }
 
@@ -1764,7 +1878,7 @@
         const ta = noteEl.querySelector('.note-src');
         const r = ta.getBoundingClientRect();
         if (r.bottom > window.innerHeight - 40 || r.top < 60)
-          ta.scrollIntoView({ block: 'center' });
+          ta.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
 
@@ -1787,9 +1901,9 @@
       const noteEl = document.querySelector(`.note[data-id="${target.id}"]`);
       if (noteEl) {
         noteEl.querySelector('.note-render').click();
-        noteEl.querySelector('.note-src').scrollIntoView({ block: 'center' });
+        noteEl.querySelector('.note-src').scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
-      else p.el.scrollIntoView({ block: 'start' });
+      else p.el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
 
     /* ------------------------------------------------------------------ *
