@@ -117,3 +117,33 @@ ipcMain.handle('delete-path', async (_e, p, isDir) => {
   try { await fs.rm(p, { recursive: !!isDir }); return true; }
   catch { return false; }
 });
+
+// ---- search — recursively list every pdf/md/markdown/txt under a folder ----
+
+const SEARCHABLE_EXT = new Set(['pdf', 'md', 'markdown', 'txt']);
+const WALK_MAX_FILES = 4000;
+
+ipcMain.handle('walk-dir', async (_e, root) => {
+  const out = [];
+  async function walk(dir) {
+    if (out.length >= WALK_MAX_FILES) return;
+    let entries;
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+    catch { return; }
+    for (const e of entries) {
+      if (out.length >= WALK_MAX_FILES) return;
+      if (e.name.startsWith('.')) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        await walk(p);
+      } else {
+        const ext = path.extname(e.name).slice(1).toLowerCase();
+        if (!SEARCHABLE_EXT.has(ext)) continue;
+        const st = await fs.stat(p).catch(() => null);
+        out.push({ path: p, name: e.name, ext, mtimeMs: st ? st.mtimeMs : 0 });
+      }
+    }
+  }
+  await walk(root);
+  return out;
+});

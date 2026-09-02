@@ -17,5 +17,8 @@ contextBridge.exposeInMainWorld('margin', {
   createFile:   (dir, name)   => ipcRenderer.invoke('create-file', dir, name),
   createFolder: (dir, name)   => ipcRenderer.invoke('create-folder', dir, name),
   renamePath:   (from, to)    => ipcRenderer.invoke('rename-path', from, to),
-  deletePath:   (p, isDir)    => ipcRenderer.invoke('delete-path', p, isDir)
+  deletePath:   (p, isDir)    => ipcRenderer.invoke('delete-path', p, isDir),
+
+  // search
+  walkDir:      root          => ipcRenderer.invoke('walk-dir', root)
 });

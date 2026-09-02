@@ -540,6 +540,152 @@
       text-align: right;
     }
 
+    /* ---------- search ---------- */
+    #search-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 32;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 11vh;
+      background: rgba(10, 13, 18, .72);
+      animation: fade-in .1s var(--ease);
+    }
+
+    #search-modal.hidden {
+      display: none
+    }
+
+    .search-card {
+      width: min(660px, 92vw);
+      max-height: 68vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .5);
+      overflow: hidden;
+      animation: modal-in .14s var(--ease);
+    }
+
+    #search-input {
+      border: 0;
+      background: none;
+      padding: 16px 18px;
+      font: 16px var(--sans);
+      color: var(--chrome-strong);
+      outline: none;
+      border-bottom: 1px solid var(--rule);
+      flex: 0 0 auto;
+    }
+
+    #search-input::placeholder {
+      color: var(--chrome-dim)
+    }
+
+    #search-status {
+      padding: 6px 18px;
+      font-size: 11px;
+      color: var(--chrome-dim);
+      border-bottom: 1px solid var(--rule);
+      flex: 0 0 auto;
+    }
+
+    #search-status.hidden {
+      display: none
+    }
+
+    #search-results {
+      overflow-y: auto;
+      flex: 1;
+      padding: 6px 0;
+    }
+
+    .search-result {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 0 6px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .search-result:hover,
+    .search-result.active {
+      background: var(--ink)
+    }
+
+    .search-result .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex: 0 0 6px;
+      background: var(--chrome-dim);
+    }
+
+    .search-result.file-pdf .dot {
+      background: var(--pen)
+    }
+
+    .search-result.file-md .dot {
+      background: #8FBF6F
+    }
+
+    .search-result .body {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .search-result .title-row {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      overflow: hidden;
+    }
+
+    .search-result .title {
+      color: var(--chrome-strong);
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .search-result .loc {
+      font-size: 10.5px;
+      color: var(--chrome-dim);
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .search-result .snippet {
+      font-size: 11.5px;
+      color: var(--chrome-text);
+      margin-top: 2px;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .search-result .snippet mark {
+      background: var(--pen-soft);
+      color: var(--chrome-strong);
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    #search-empty {
+      padding: 26px 18px;
+      color: var(--chrome-dim);
+      font-size: 12.5px;
+      text-align: center;
+    }
+
     /* ---------- viewer ---------- */
     #surface {
       position: absolute;
@@ -1111,6 +1257,7 @@
     <span class="chip" title="Drag on a page to highlight it">highlight <kbd>Drag</kbd></span>
     <button class="chip" id="latexbtn">LaTeX</button>
     <button class="chip" id="settingsbtn">Settings <kbd>⌃,</kbd></button>
+    <button class="chip" id="searchbtn">Search <kbd>⌃F</kbd></button>
     <button class="chip" id="openfolderbtn">Folder <kbd>⌃⇧O</kbd></button>
     <button class="chip" id="openbtn">Open PDF <kbd>⌃O</kbd></button>
     <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
@@ -1165,6 +1312,8 @@
         <dd>Open a folder in the sidebar</dd>
         <dt>Ctrl+,</dt>
         <dd>Settings — theme, accent color, note text size</dd>
+        <dt>Ctrl+F</dt>
+        <dd>Search filenames, PDF text, and notes across the open folder</dd>
         <dt>Ctrl+= / Ctrl+- / Ctrl+0</dt>
         <dd>Zoom in, out, reset</dd>
         <dt>Ctrl+E</dt>
@@ -1183,6 +1332,14 @@
         Click the <strong>＋</strong> or right-click for a new note or folder;
         right-click any item to rename or delete it.
       </p>
+    </div>
+  </div>
+
+  <div id="search-modal" class="hidden">
+    <div class="search-card">
+      <input type="text" id="search-input" placeholder="Search notes and PDFs…" autocomplete="off" spellcheck="false">
+      <div id="search-status" class="hidden"></div>
+      <div id="search-results"></div>
     </div>
   </div>
 
@@ -2265,14 +2422,264 @@
     }
 
     /* ------------------------------------------------------------------ *
+     *  search — indexes filenames, full PDF text, inline PDF notes, and
+     *  standalone markdown notes across the whole open folder (or just the
+     *  open PDF if no folder is open). Indexing is progressive and cached
+     *  per session, keyed by path + mtime, so repeat searches are instant.
+     * ------------------------------------------------------------------ */
+    const SearchIndex = new Map(); // path -> {name,path,ext,type,mtimeMs,pages,inlineNotes,text}
+    let searchToken = 0;
+    let currentResults = [];
+    let activeResultIndex = -1;
+
+    async function indexFile(entry) {
+      const cached = SearchIndex.get(entry.path);
+      if (cached && cached.mtimeMs === entry.mtimeMs) return cached;
+      let doc;
+      if (entry.ext === 'pdf') {
+        const pages = [];
+        let inlineNotes = [];
+        try {
+          const f = await window.margin.readPdf(entry.path);
+          if (f) {
+            const pdf = await pdfjsLib.getDocument({ data: f.bytes }).promise;
+            for (let n = 1; n <= pdf.numPages; n++) {
+              const pg = await pdf.getPage(n);
+              const tc = await pg.getTextContent();
+              const text = tc.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+              pages.push({ num: n, text });
+            }
+          }
+        } catch (e) { /* unreadable/corrupt pdf — still searchable by filename */ }
+        try {
+          const data = await window.margin.loadNotes(entry.path);
+          if (data && Array.isArray(data.notes)) {
+            inlineNotes = data.notes.filter(n => n.md && n.md.trim())
+              .map(n => ({ id: n.id, page: n.page, text: n.md }));
+          }
+        } catch (e) { }
+        doc = { name: entry.name, path: entry.path, ext: entry.ext, type: 'pdf', mtimeMs: entry.mtimeMs, pages, inlineNotes };
+      } else {
+        let text = '';
+        try { text = await window.margin.readText(entry.path) || ''; } catch (e) { }
+        doc = { name: entry.name, path: entry.path, ext: entry.ext, type: 'note', mtimeMs: entry.mtimeMs, text };
+      }
+      SearchIndex.set(entry.path, doc);
+      return doc;
+    }
+
+    async function startIndexing() {
+      const token = ++searchToken;
+      const statusEl = $('#search-status');
+      let targets = [];
+      if (State.folder) {
+        targets = await window.margin.walkDir(State.folder);
+      } else if (State.path) {
+        targets = [{ path: State.path, name: State.name, ext: 'pdf', mtimeMs: 0 }];
+      }
+      if (token !== searchToken) return;
+      if (!targets.length) {
+        statusEl.textContent = 'Open a folder or a PDF to search.';
+        statusEl.classList.remove('hidden');
+        return;
+      }
+      const stillThere = new Set(targets.map(t => t.path));
+      for (const p of [...SearchIndex.keys()]) if (!stillThere.has(p)) SearchIndex.delete(p);
+
+      let done = 0;
+      for (const entry of targets) {
+        if (token !== searchToken) return;
+        const cached = SearchIndex.get(entry.path);
+        if (!cached || cached.mtimeMs !== entry.mtimeMs) await indexFile(entry);
+        done++;
+        if (done % 3 === 0 || done === targets.length) {
+          if (token !== searchToken) return;
+          if (done < targets.length) {
+            statusEl.textContent = `Indexing… ${done}/${targets.length}`;
+            statusEl.classList.remove('hidden');
+          } else {
+            statusEl.classList.add('hidden');
+          }
+          runSearch();
+        }
+      }
+    }
+
+    // require every query word present (AND search); word-boundary and
+    // whole-phrase matches score higher, matches earlier in the text too
+    function scoreText(haystackLower, words, phraseLower) {
+      if (!haystackLower) return -1;
+      let score = 0;
+      if (phraseLower && haystackLower.includes(phraseLower)) score += 50;
+      for (const w of words) {
+        const idx = haystackLower.indexOf(w);
+        if (idx === -1) return -1;
+        const boundary = idx === 0 || /\W/.test(haystackLower[idx - 1]);
+        score += boundary ? 8 : 3;
+        score += Math.max(0, 6 - Math.floor(idx / 50));
+      }
+      return score;
+    }
+
+    function buildSnippet(text, words) {
+      const lower = text.toLowerCase();
+      let pos = -1;
+      for (const w of words) {
+        const i = lower.indexOf(w);
+        if (i !== -1 && (pos === -1 || i < pos)) pos = i;
+      }
+      if (pos === -1) pos = 0;
+      const start = Math.max(0, pos - 40);
+      const end = Math.min(text.length, pos + 100);
+      let snippet = (start > 0 ? '…' : '') + text.slice(start, end).trim() + (end < text.length ? '…' : '');
+      snippet = escapeHtml(snippet);
+      for (const w of words) {
+        const re = new RegExp('(' + escapeRegExp(w) + ')', 'ig');
+        snippet = snippet.replace(re, '<mark>$1</mark>');
+      }
+      return snippet;
+    }
+
+    function runSearch() {
+      const q = $('#search-input').value.trim();
+      if (!q) { currentResults = []; renderSearchResults(); return; }
+      const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+      const qLower = q.toLowerCase();
+      const results = [];
+      for (const doc of SearchIndex.values()) {
+        const nameScore = scoreText(doc.name.toLowerCase(), words, qLower);
+        if (nameScore > 0) results.push({ kind: 'file', doc, score: nameScore + 60 });
+        if (doc.type === 'pdf') {
+          for (const p of doc.pages) {
+            const s = scoreText(p.text.toLowerCase(), words, qLower);
+            if (s > 0) results.push({ kind: 'pdf-page', doc, page: p.num, score: s, snippet: buildSnippet(p.text, words) });
+          }
+          for (const note of doc.inlineNotes) {
+            const s = scoreText(note.text.toLowerCase(), words, qLower);
+            if (s > 0) results.push({ kind: 'pdf-note', doc, note, score: s + 5, snippet: buildSnippet(note.text, words) });
+          }
+        } else {
+          const s = scoreText(doc.text.toLowerCase(), words, qLower);
+          if (s > 0) results.push({ kind: 'note-file', doc, score: s, snippet: buildSnippet(doc.text, words) });
+        }
+      }
+      results.sort((a, b) => b.score - a.score);
+      currentResults = results.slice(0, 60);
+      renderSearchResults();
+    }
+
+    function renderSearchResults() {
+      const list = $('#search-results');
+      list.innerHTML = '';
+      activeResultIndex = currentResults.length ? 0 : -1;
+      if (!currentResults.length) {
+        if ($('#search-input').value.trim()) {
+          const empty = document.createElement('div');
+          empty.id = 'search-empty'; empty.textContent = 'No matches';
+          list.appendChild(empty);
+        }
+        return;
+      }
+      currentResults.forEach((r, i) => {
+        const row = document.createElement('div');
+        row.className = 'search-result ' + (r.doc.ext === 'pdf' ? 'file-pdf' : 'file-md') + (i === 0 ? ' active' : '');
+        const dot = document.createElement('span'); dot.className = 'dot';
+        const body = document.createElement('div'); body.className = 'body';
+        const titleRow = document.createElement('div'); titleRow.className = 'title-row';
+        const title = document.createElement('span'); title.className = 'title'; title.textContent = r.doc.name;
+        const loc = document.createElement('span'); loc.className = 'loc';
+        loc.textContent = r.kind === 'pdf-page' ? `p.${r.page}` : r.kind === 'pdf-note' ? `p.${r.note.page} · note` : '';
+        titleRow.append(title, loc);
+        body.appendChild(titleRow);
+        if (r.snippet) {
+          const sn = document.createElement('div'); sn.className = 'snippet'; sn.innerHTML = r.snippet;
+          body.appendChild(sn);
+        }
+        row.append(dot, body);
+        row.addEventListener('click', () => openSearchResult(r));
+        row.addEventListener('mousemove', () => setActiveResult(i));
+        list.appendChild(row);
+      });
+    }
+
+    function setActiveResult(i) {
+      [...$('#search-results').children].forEach((el, idx) => el.classList.toggle('active', idx === i));
+      activeResultIndex = i;
+    }
+
+    function scrollActiveIntoView() {
+      const el = $('#search-results').children[activeResultIndex];
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+
+    async function jumpToPdfLocation(pageNum, noteId) {
+      const p = State.pages[pageNum - 1];
+      if (!p) return;
+      await renderPage(p);
+      if (noteId) {
+        const noteEl = document.querySelector(`.note[data-id="${noteId}"]`);
+        if (noteEl) {
+          noteEl.querySelector('.note-render').click();
+          noteEl.querySelector('.note-src').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+      }
+      p.el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+
+    async function openSearchResult(r) {
+      const query = $('#search-input').value.trim();
+      closeSearch();
+      if (r.doc.ext === 'pdf') {
+        if (State.path !== r.doc.path) await openPdfFromTree(r.doc.path);
+        await new Promise(res => setTimeout(res, 30));
+        if (r.kind === 'pdf-page') jumpToPdfLocation(r.page, null);
+        else if (r.kind === 'pdf-note') jumpToPdfLocation(r.note.page, r.note.id);
+        else jumpToPdfLocation(1, null);
+      } else {
+        await openNoteFile(r.doc.path);
+        if (query) { try { window.find(query); } catch (e) { } }
+      }
+    }
+
+    function openSearch() {
+      $('#search-modal').classList.remove('hidden');
+      const input = $('#search-input');
+      input.value = '';
+      input.focus();
+      currentResults = [];
+      renderSearchResults();
+      $('#search-status').classList.add('hidden');
+      startIndexing();
+    }
+    function closeSearch() {
+      $('#search-modal').classList.add('hidden');
+      searchToken++; // abandon any in-flight indexing run
+    }
+    $('#searchbtn').onclick = openSearch;
+    $('#search-modal').onclick = e => { if (e.target.id === 'search-modal') closeSearch(); };
+    let searchDebounce = null;
+    $('#search-input').addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(runSearch, 80);
+    });
+    $('#search-input').addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveResult(Math.min(activeResultIndex + 1, currentResults.length - 1)); scrollActiveIntoView(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveResult(Math.max(activeResultIndex - 1, 0)); scrollActiveIntoView(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (currentResults[activeResultIndex]) openSearchResult(currentResults[activeResultIndex]); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
+    });
+
+    /* ------------------------------------------------------------------ *
      *  global keys
      * ------------------------------------------------------------------ */
     window.addEventListener('keydown', e => {
-      if (e.target.id === 'prompt-input') return; // handled by promptText's own listener
+      if (e.target.id === 'prompt-input' || e.target.id === 'search-input') return; // handled by their own listeners
       const inEditor = e.target.tagName === 'TEXTAREA' && e.target.classList.contains('note-src') ||
         e.target.id === 'notefile-src';
       const mod = e.ctrlKey || e.metaKey;
 
+      if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch(); return; }
       if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openFolder(); return; }
       if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickFile(); return; }
       if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); exportMarkdown(); return; }
@@ -2297,6 +2704,7 @@
         if (e.key === 'Escape') {
           $('#help').classList.add('hidden');
           $('#settings-modal').classList.add('hidden');
+          if (!$('#search-modal').classList.contains('hidden')) closeSearch();
           return;
         }
         if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
