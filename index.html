@@ -1233,9 +1233,58 @@
 
     .snippet-row {
       display: grid;
-      grid-template-columns: 110px 1fr auto;
+      grid-template-columns: 110px 1fr 78px auto;
       gap: 8px;
       margin: 8px 0
+    }
+
+    #snippet-filter {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 7px 9px;
+      margin-bottom: 4px;
+      background: var(--ink);
+      color: var(--chrome-strong);
+      font: 13px var(--sans);
+      transition: border-color var(--fast) var(--ease);
+    }
+
+    #snippet-filter::placeholder {
+      color: var(--chrome-dim)
+    }
+
+    .snippet-row select {
+      min-width: 0;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 6px 4px;
+      background: var(--ink);
+      color: var(--chrome-text);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #snippet-list {
+      max-height: 46vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    #snippet-list::-webkit-scrollbar {
+      width: 10px
+    }
+
+    #snippet-list::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    #snippet-list::-webkit-scrollbar-thumb {
+      background: var(--rule);
+      border-radius: 6px;
+      border: 2px solid var(--ink-2);
     }
 
     .snippet-row input {
@@ -1280,8 +1329,95 @@
     }
 
     @media (max-width: 620px) {
-      .snippet-row { grid-template-columns: 1fr auto }
+      .snippet-row { grid-template-columns: 1fr 78px auto }
       .snippet-row input:nth-child(2) { grid-column: 1 / -1; grid-row: 2 }
+    }
+
+    /* ---------- lecture audio ---------- */
+    #recbtn.recording {
+      color: #fff;
+      border-color: var(--danger);
+      background: var(--danger);
+      animation: rec-pulse 1.8s ease-in-out infinite;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @keyframes rec-pulse {
+      0%, 100% { opacity: 1 }
+      50% { opacity: .62 }
+    }
+
+    #lecture-audio {
+      display: none
+    }
+
+    #audiobar {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      z-index: 28;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 12px 7px 9px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+      animation: fade-in .15s var(--ease);
+    }
+
+    body.has-folder #audiobar {
+      left: 256px
+    }
+
+    #audiobar.hidden {
+      display: none
+    }
+
+    #audio-play {
+      border: 0;
+      background: none;
+      color: var(--chrome-strong);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      width: 22px;
+      padding: 0;
+      transition: transform var(--fast) var(--ease);
+    }
+
+    #audio-play:active {
+      transform: scale(.88)
+    }
+
+    #audio-seek {
+      width: 190px;
+      accent-color: var(--pen);
+      cursor: pointer;
+    }
+
+    #audio-time {
+      font-size: 11.5px;
+      color: var(--chrome-dim);
+      font-variant-numeric: tabular-nums;
+      min-width: 76px;
+    }
+
+    .note-head .at {
+      border: 0;
+      background: none;
+      color: var(--pen);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      padding: 2px 4px;
+      font-variant-numeric: tabular-nums;
+      transition: opacity var(--fast) var(--ease);
+    }
+
+    .note-head .at:hover {
+      opacity: .7
     }
 
     #toast {
@@ -1327,6 +1463,7 @@
     <span class="spacer"></span>
     <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
     <span class="chip" title="Drag on a page to highlight it">highlight <kbd>Drag</kbd></span>
+    <button class="chip" id="recbtn" title="Record the lecture — notes get timestamped">Record</button>
     <button class="chip" id="latexbtn">LaTeX</button>
     <button class="chip" id="settingsbtn">Settings <kbd>⌃,</kbd></button>
     <button class="chip" id="searchbtn">Search <kbd>⌃F</kbd></button>
@@ -1370,6 +1507,10 @@
         <dd>Split the page where you click and start a note there</dd>
         <dt>Drag</dt>
         <dd>Highlight that spot on the page; click a highlight to remove it</dd>
+        <dt>Tab</dt>
+        <dd>Expand a snippet, jump to the next <code>$0</code> slot, or step out of <code>}</code></dd>
+        <dt>/</dt>
+        <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
         <dd>Leave the note and go back to the page (deletes it if empty)</dd>
         <dt>Alt+↑ / Alt+↓</dt>
@@ -1443,10 +1584,14 @@
   <div id="latex-settings" class="hidden">
     <div class="card">
       <h2>LaTeX Suite snippets</h2>
-      <p>Type a trigger at the end of a note and press Tab. Use <code>$0</code>,
-        <code>$1</code>, <code>$2</code> for Tab positions. Changes save automatically.</p>
+      <p>Type a trigger and press Tab. Use <code>$0</code>, <code>$1</code>,
+        <code>$2</code> for Tab positions. <strong>math</strong> snippets only fire inside
+        <code>$…$</code>, <strong>text</strong> ones only outside. Changes save automatically.</p>
+      <p style="margin-top:-8px">Inside math you also get <code>/</code> for auto-fractions,
+        Tab to step out of <code>}</code> and <code>$</code>, and automatic bracket pairing.</p>
+      <input type="text" id="snippet-filter" placeholder="Filter snippets…" spellcheck="false">
       <div class="snippet-row">
-        <strong>Trigger</strong><strong>Template</strong><span></span>
+        <strong>Trigger</strong><strong>Template</strong><strong>Mode</strong><span></span>
       </div>
       <div id="snippet-list"></div>
       <div class="snippet-actions">
@@ -1467,6 +1612,13 @@
       </div>
     </div>
   </div>
+
+  <div id="audiobar" class="hidden">
+    <button id="audio-play" title="Play / pause">▶</button>
+    <input type="range" id="audio-seek" min="0" max="1000" value="0" step="1">
+    <span id="audio-time">0:00 / 0:00</span>
+  </div>
+  <audio id="lecture-audio" preload="metadata"></audio>
 
   <div id="toast"></div>
   <input type="file" id="filepick" accept="application/pdf" hidden>
@@ -1620,13 +1772,87 @@
     }
     applyAppearance();
 
+    // mode: 'math' fires only inside $…$, 'text' only outside, omitted = both.
+    const mathSnip = (trigger, template) => ({ trigger, template, mode: 'math' });
     const DEFAULT_SNIPPETS = [
-      { trigger: 'mk', template: '$0$' },
-      { trigger: 'dm', template: '$$\n$0\n$$' },
-      { trigger: 'frac', template: '\\frac{$0}{$1}' },
-      { trigger: 'sq', template: '^{2}$0' },
-      { trigger: 'sr', template: '\\sqrt{$0}' },
-      { trigger: '->', template: '\\to $0' }
+      // entering math
+      { trigger: 'mk', template: '$0$', mode: 'text' },
+      { trigger: 'dm', template: '$$\n$0\n$$', mode: 'text' },
+
+      // fractions, powers, roots
+      mathSnip('frac', '\\frac{$0}{$1}'), mathSnip('sq', '^{2}$0'), mathSnip('cb', '^{3}$0'),
+      mathSnip('sr', '\\sqrt{$0}'), mathSnip('nr', '\\sqrt[$0]{$1}'), mathSnip('box', '\\boxed{$0}'),
+
+      // greek, lower case
+      mathSnip('al', '\\alpha '), mathSnip('be', '\\beta '), mathSnip('ga', '\\gamma '), mathSnip('de', '\\delta '),
+      mathSnip('ep', '\\epsilon '), mathSnip('ve', '\\varepsilon '), mathSnip('ze', '\\zeta '), mathSnip('et', '\\eta '),
+      mathSnip('th', '\\theta '), mathSnip('vt', '\\vartheta '), mathSnip('io', '\\iota '), mathSnip('ka', '\\kappa '),
+      mathSnip('la', '\\lambda '), mathSnip('mu', '\\mu '), mathSnip('nu', '\\nu '), mathSnip('xi', '\\xi '),
+      mathSnip('pi', '\\pi '), mathSnip('rh', '\\rho '), mathSnip('si', '\\sigma '), mathSnip('ta', '\\tau '),
+      mathSnip('up', '\\upsilon '), mathSnip('ph', '\\phi '), mathSnip('vp', '\\varphi '), mathSnip('ch', '\\chi '),
+      mathSnip('ps', '\\psi '), mathSnip('om', '\\omega '),
+
+      // greek, upper case
+      mathSnip('Ga', '\\Gamma '), mathSnip('De', '\\Delta '), mathSnip('Th', '\\Theta '), mathSnip('La', '\\Lambda '),
+      mathSnip('Xi', '\\Xi '), mathSnip('Pi', '\\Pi '), mathSnip('Si', '\\Sigma '), mathSnip('Ph', '\\Phi '),
+      mathSnip('Ps', '\\Psi '), mathSnip('Om', '\\Omega '),
+
+      // number sets
+      mathSnip('RR', '\\mathbb{R}'), mathSnip('NN', '\\mathbb{N}'), mathSnip('ZZ', '\\mathbb{Z}'),
+      mathSnip('QQ', '\\mathbb{Q}'), mathSnip('CC', '\\mathbb{C}'), mathSnip('FF', '\\mathbb{F}'),
+      mathSnip('PP', '\\mathbb{P}'), mathSnip('EE', '\\mathbb{E}'),
+
+      // big operators and calculus
+      mathSnip('sum', '\\sum_{$0}^{$1} $2'), mathSnip('prod', '\\prod_{$0}^{$1} $2'),
+      mathSnip('int', '\\int_{$0}^{$1} $2'), mathSnip('iint', '\\iint_{$0} $1'), mathSnip('oint', '\\oint_{$0} $1'),
+      mathSnip('lim', '\\lim_{$0 \\to $1} $2'), mathSnip('pd', '\\frac{\\partial $0}{\\partial $1}'),
+      mathSnip('ppd', '\\frac{\\partial^{2} $0}{\\partial $1^{2}}'), mathSnip('dd', '\\frac{d$0}{d$1}'),
+      mathSnip('del', '\\nabla '), mathSnip('oo', '\\infty '),
+
+      // accents and fonts
+      mathSnip('bar', '\\overline{$0}'), mathSnip('hat', '\\hat{$0}'), mathSnip('vec', '\\vec{$0}'),
+      mathSnip('td', '\\tilde{$0}'), mathSnip('dot', '\\dot{$0}'), mathSnip('ddot', '\\ddot{$0}'),
+      mathSnip('bf', '\\mathbf{$0}'), mathSnip('cal', '\\mathcal{$0}'), mathSnip('frak', '\\mathfrak{$0}'),
+      mathSnip('rm', '\\mathrm{$0}'), mathSnip('bb', '\\mathbb{$0}'), mathSnip('txt', '\\text{$0}'),
+
+      // relations
+      mathSnip('!=', '\\neq '), mathSnip('<=', '\\leq '), mathSnip('>=', '\\geq '), mathSnip('~~', '\\approx '),
+      mathSnip('==', '\\equiv '), mathSnip('prop', '\\propto '), mathSnip('sim', '\\sim '), mathSnip('cong', '\\cong '),
+      mathSnip('ll', '\\ll '), mathSnip('gg', '\\gg '),
+
+      // arrows
+      mathSnip('->', '\\to '), mathSnip('<-', '\\leftarrow '), mathSnip('=>', '\\implies '),
+      mathSnip('<=>', '\\iff '), mathSnip('|->', '\\mapsto '),
+
+      // sets and logic
+      mathSnip('in', '\\in '), mathSnip('nin', '\\notin '), mathSnip('sub', '\\subseteq '), mathSnip('supset', '\\supseteq '),
+      mathSnip('cup', '\\cup '), mathSnip('cap', '\\cap '), mathSnip('sm', '\\setminus '), mathSnip('empty', '\\emptyset '),
+      mathSnip('fa', '\\forall '), mathSnip('ex', '\\exists '), mathSnip('land', '\\land '), mathSnip('lor', '\\lor '),
+      mathSnip('neg', '\\neg '), mathSnip('st', '\\ \\text{s.t.}\\ '),
+
+      // named operators
+      mathSnip('sin', '\\sin '), mathSnip('cos', '\\cos '), mathSnip('tan', '\\tan '), mathSnip('sec', '\\sec '),
+      mathSnip('csc', '\\csc '), mathSnip('cot', '\\cot '), mathSnip('log', '\\log '), mathSnip('ln', '\\ln '),
+      mathSnip('exp', '\\exp '), mathSnip('det', '\\det '), mathSnip('dim', '\\dim '), mathSnip('deg', '\\deg '),
+      mathSnip('gcd', '\\gcd '), mathSnip('max', '\\max '), mathSnip('min', '\\min '), mathSnip('sup', '\\sup '),
+      mathSnip('inf', '\\inf '), mathSnip('ker', '\\ker '), mathSnip('tr', '\\operatorname{tr} '),
+      mathSnip('rank', '\\operatorname{rank} '),
+
+      // delimiters
+      mathSnip('abs', '\\left|$0\\right|'), mathSnip('nrm', '\\left\\|$0\\right\\|'),
+      mathSnip('br', '\\left($0\\right)'), mathSnip('set', '\\{$0\\}'),
+      mathSnip('ceil', '\\left\\lceil $0\\right\\rceil'), mathSnip('floor', '\\left\\lfloor $0\\right\\rfloor'),
+      mathSnip('<>', '\\langle $0\\rangle'),
+
+      // environments
+      mathSnip('mat', '\\begin{pmatrix}$0\\end{pmatrix}'), mathSnip('bmat', '\\begin{bmatrix}$0\\end{bmatrix}'),
+      mathSnip('vmat', '\\begin{vmatrix}$0\\end{vmatrix}'), mathSnip('cases', '\\begin{cases}$0\\end{cases}'),
+      mathSnip('align', '\\begin{aligned}$0\\end{aligned}'), mathSnip('arr', '\\begin{array}{cc}$0\\end{array}'),
+
+      // odds and ends
+      mathSnip('cdot', '\\cdot '), mathSnip('xx', '\\times '), mathSnip('div', '\\div '), mathSnip('pm', '\\pm '),
+      mathSnip('mp', '\\mp '), mathSnip('...', '\\dots '), mathSnip('cdots', '\\cdots '), mathSnip('ang', '\\angle '),
+      mathSnip('perp', '\\perp '), mathSnip('par', '\\parallel ')
     ];
     let snippets = loadSnippets();
 
@@ -1637,6 +1863,10 @@
           const result = saved.filter(x => x && x.trigger && typeof x.template === 'string');
           const frac = result.find(x => x.trigger === 'frac');
           if (frac && frac.template === '\\frac{$0}{}') frac.template = '\\frac{$0}{$1}';
+          // an older, much smaller pack was saved before the math library existed;
+          // keep whatever was customised and fold the new defaults in alongside it
+          const seen = new Set(result.map(x => x.trigger));
+          for (const def of DEFAULT_SNIPPETS) if (!seen.has(def.trigger)) result.push({ ...def });
           return result;
         }
       } catch (e) { }
@@ -1655,7 +1885,12 @@
       const inMath = isMathMode(ending);
       const boundary = inMath ? '(?:^|[^A-Za-z])' : '(?:^|\\s|\\d)';
       const match = snippets
-        .filter(x => x.trigger)
+        .filter(x => {
+          if (!x.trigger) return false;
+          if (x.mode === 'math') return inMath;
+          if (x.mode === 'text') return !inMath;
+          return true;
+        })
         .sort((a, b) => b.trigger.length - a.trigger.length)
         .find(x => {
           if (inMath && /(^|[^\\$])\${1,2}(?!\d)/.test(x.template)) return false;
@@ -1713,6 +1948,125 @@
       return true;
     }
 
+    /* ------------------------------------------------------------------ *
+     *  math typing helpers — auto-fraction, tab-out, bracket pairing.
+     *  All of these only fire inside math, so ordinary prose is untouched.
+     * ------------------------------------------------------------------ */
+    const PAIRS = { '(': ')', '[': ']', '{': '}' };
+    const TABOUT = ')]}$|';
+
+    // Tab at the end of "\frac{a}{b|}" should step past the brace, not indent.
+    function tabOut(source) {
+      if (source.selectionStart !== source.selectionEnd) return false;
+      const pos = source.selectionStart;
+      const next = source.value[pos];
+      if (!next || !TABOUT.includes(next)) return false;
+      source.setSelectionRange(pos + 1, pos + 1);
+      return true;
+    }
+
+    // How far back does the term before "/" reach? Handles a balanced group,
+    // a \command, or a plain run like "2x^2" — and pulls in "\sqrt" of "\sqrt{x}".
+    function fractionStart(text) {
+      let i = text.length;
+      if (i === 0 || /\s/.test(text[i - 1])) return -1;
+      const openerFor = { ')': '(', ']': '[', '}': '{' };
+      const close = text[i - 1];
+      if (openerFor[close]) {
+        const open = openerFor[close];
+        let depth = 0;
+        while (i > 0) {
+          const ch = text[i - 1];
+          if (ch === close) depth++;
+          else if (ch === open) { depth--; if (!depth) { i--; break; } }
+          i--;
+        }
+        if (depth) return -1;
+      } else {
+        while (i > 0 && /[A-Za-z0-9.^_]/.test(text[i - 1])) i--;
+        if (i > 0 && text[i - 1] === '\\') i--;
+        if (i === text.length) return -1;
+      }
+      const cmd = /\\[A-Za-z]+$/.exec(text.slice(0, i));
+      if (cmd) i -= cmd[0].length;
+      return i;
+    }
+
+    // "/" in math turns the preceding term (or the selection) into a fraction
+    function autoFraction(source) {
+      const value = source.value;
+      const start = source.selectionStart, end = source.selectionEnd;
+      if (!isMathMode(value.slice(0, start))) return false;
+      let numerator, from;
+      if (start !== end) { numerator = value.slice(start, end); from = start; }
+      else {
+        const s = fractionStart(value.slice(0, start));
+        if (s < 0) return false;
+        from = s; numerator = value.slice(s, start);
+      }
+      if (!numerator) return false;
+      const before = value.slice(0, from), after = value.slice(end);
+      const head = '\\frac{' + numerator + '}{';
+      source.value = before + head + '}' + after;
+      const caret = before.length + head.length;
+      source.setSelectionRange(caret, caret);
+      source._snippetStops = [caret, caret + 1]; // denominator, then out past "}"
+      source._snippetIndex = 0;
+      source._snippetValue = source.value;
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      autoGrow(source);
+      return true;
+    }
+
+    function autoPair(source, key) {
+      const close = PAIRS[key];
+      const start = source.selectionStart, end = source.selectionEnd;
+      if (!isMathMode(source.value.slice(0, start))) return false;
+      const selected = source.value.slice(start, end);
+      source.setRangeText(key + selected + close, start, end, 'end');
+      if (selected) source.setSelectionRange(start + 1, start + 1 + selected.length);
+      else source.setSelectionRange(start + 1, start + 1);
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }
+
+    // typing the closer when it is already there just steps over it
+    function typeOverPair(source, key) {
+      const pos = source.selectionStart;
+      if (pos !== source.selectionEnd || source.value[pos] !== key) return false;
+      if (!isMathMode(source.value.slice(0, pos))) return false;
+      source.setSelectionRange(pos + 1, pos + 1);
+      return true;
+    }
+
+    // backspace between an empty pair removes both halves
+    function deletePair(source) {
+      const pos = source.selectionStart;
+      if (pos !== source.selectionEnd || pos === 0) return false;
+      const open = source.value[pos - 1];
+      if (!PAIRS[open] || PAIRS[open] !== source.value[pos]) return false;
+      source.setRangeText('', pos - 1, pos + 1, 'end');
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }
+
+    // Shared by both note editors. Returns true when the key was consumed.
+    function handleMathKey(source, e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (moveSnippetTab(source) || expandSnippet(source, false) || tabOut(source)) return true;
+        source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      }
+      if (e.altKey || e.ctrlKey || e.metaKey) return false;
+      if (e.key === '/' && autoFraction(source)) { e.preventDefault(); return true; }
+      if (PAIRS[e.key] && autoPair(source, e.key)) { e.preventDefault(); return true; }
+      if (Object.values(PAIRS).includes(e.key) && typeOverPair(source, e.key)) { e.preventDefault(); return true; }
+      if (e.key === 'Backspace' && deletePair(source)) { e.preventDefault(); return true; }
+      return false;
+    }
+
     function isMathMode(value) {
       let dollars = 0;
       for (let i = 0; i < value.length; i++) {
@@ -1729,29 +2083,57 @@
 
     function paintSnippetSettings() {
       const list = $('#snippet-list');
+      const filter = ($('#snippet-filter').value || '').toLowerCase();
       list.innerHTML = '';
-      snippets.forEach((snippet, index) => {
+      const shown = snippets.filter(s => !filter ||
+        s.trigger.toLowerCase().includes(filter) || s.template.toLowerCase().includes(filter));
+      for (const snippet of shown) {
         const row = document.createElement('div'); row.className = 'snippet-row';
         const trigger = document.createElement('input'); trigger.value = snippet.trigger; trigger.placeholder = 'trigger';
         const template = document.createElement('input'); template.value = snippet.template; template.placeholder = 'template';
+        const mode = document.createElement('select');
+        for (const [value, label] of [['math', 'math'], ['text', 'text'], ['any', 'both']]) {
+          const option = document.createElement('option');
+          option.value = value; option.textContent = label;
+          if ((snippet.mode || 'any') === value) option.selected = true;
+          mode.appendChild(option);
+        }
         const remove = document.createElement('button'); remove.textContent = 'Remove';
         trigger.oninput = () => { snippet.trigger = trigger.value; saveSnippets(); };
         template.oninput = () => { snippet.template = template.value; saveSnippets(); };
-        remove.onclick = () => { snippets.splice(index, 1); saveSnippets(); paintSnippetSettings(); };
-        row.append(trigger, template, remove); list.appendChild(row);
-      });
+        mode.onchange = () => { snippet.mode = mode.value; saveSnippets(); };
+        // look the entry up by identity — the visible rows may be filtered
+        remove.onclick = () => {
+          const at = snippets.indexOf(snippet);
+          if (at >= 0) snippets.splice(at, 1);
+          saveSnippets(); paintSnippetSettings();
+        };
+        row.append(trigger, template, mode, remove); list.appendChild(row);
+      }
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:14px 2px;color:var(--chrome-dim);font-size:12.5px';
+        empty.textContent = 'No snippets match that filter.';
+        list.appendChild(empty);
+      }
     }
 
     $('#latexbtn').onclick = () => {
+      $('#snippet-filter').value = '';
       paintSnippetSettings();
       $('#latex-settings').classList.remove('hidden');
     };
+    $('#snippet-filter').addEventListener('input', paintSnippetSettings);
     $('#snippet-close').onclick = () => $('#latex-settings').classList.add('hidden');
     $('#snippet-add').onclick = () => {
-      snippets.push({ trigger: '', template: '$0' });
+      snippets.push({ trigger: '', template: '$0', mode: 'math' });
+      $('#snippet-filter').value = '';
       paintSnippetSettings();
-      $('#snippet-list input').focus();
       saveSnippets();
+      // focus the row that was just added, not the first one in the list
+      const rows = $('#snippet-list').querySelectorAll('.snippet-row input');
+      const last = rows[rows.length - 2]; // trigger input of the final row
+      if (last) { last.scrollIntoView({ block: 'nearest' }); last.focus(); }
     };
     $('#snippet-reset').onclick = () => {
       snippets = DEFAULT_SNIPPETS.map(x => ({ ...x }));
@@ -1760,6 +2142,177 @@
     $('#latex-settings').onclick = e => {
       if (e.target.id === 'latex-settings') $('#latex-settings').classList.add('hidden');
     };
+
+    /* ------------------------------------------------------------------ *
+     *  lecture audio — record the class, stamp every note with the moment
+     *  it was written, click the stamp to hear that moment again.
+     *  The recording lives next to the PDF: lecture.pdf -> lecture.margin.webm
+     * ------------------------------------------------------------------ */
+    let recorder = null, recordChunks = [], recordStartedAt = 0, recordTicker = null;
+    let recordingPath = null;      // the PDF the running recording belongs to
+    let startingRecording = false; // the mic can take a second or two to open
+
+    function fmtTime(seconds) {
+      if (!isFinite(seconds) || seconds < 0) seconds = 0;
+      const mins = Math.floor(seconds / 60);
+      return mins + ':' + String(Math.floor(seconds % 60)).padStart(2, '0');
+    }
+
+    // seconds since recording began, or null when we are not recording
+    function recordingElapsed() {
+      return recorder ? (Date.now() - recordStartedAt) / 1000 : null;
+    }
+
+    function stampNow(target) {
+      const t = recordingElapsed();
+      if (t != null) target.t = +t.toFixed(2);
+    }
+
+    function paintRecordButton() {
+      const btn = $('#recbtn');
+      if (recorder) {
+        btn.classList.add('recording');
+        btn.textContent = '● ' + fmtTime(recordingElapsed());
+        btn.title = 'Stop recording';
+      } else if (startingRecording) {
+        btn.classList.add('recording');
+        btn.textContent = '● starting…';
+        btn.title = 'Waiting for the microphone';
+      } else {
+        btn.classList.remove('recording');
+        btn.textContent = 'Record';
+        btn.title = 'Record the lecture — notes get timestamped';
+      }
+    }
+
+    async function toggleRecording() {
+      if (recorder) { stopRecording(); return; }
+      if (startingRecording) return;
+      if (!hasShell) { toast('Recording needs the desktop app'); return; }
+      if (!State.path) { toast('Open a PDF to record a lecture'); return; }
+      startingRecording = true;
+      paintRecordButton(); // opening the mic is not instant — say so immediately
+      try {
+        await startRecording();
+      } finally {
+        startingRecording = false;
+        paintRecordButton();
+      }
+    }
+
+    async function startRecording() {
+      if (await window.margin.audioPath(State.path)) {
+        if (!confirm('This lecture already has a recording.\n\nStart a new one and replace it? '
+          + 'Timestamps on existing notes will no longer line up.')) return;
+      }
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (err) { toast('Could not start the microphone: ' + err.message); return; }
+      recordChunks = [];
+      try { recorder = new MediaRecorder(stream); }
+      catch (err) {
+        stream.getTracks().forEach(t => t.stop());
+        toast('Recording is not supported here'); return;
+      }
+      recorder.ondataavailable = ev => { if (ev.data && ev.data.size) recordChunks.push(ev.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const seconds = (Date.now() - recordStartedAt) / 1000;
+        const type = recorder.mimeType || 'audio/webm';
+        const pdfPath = recordingPath;
+        recorder = null; recordingPath = null;
+        clearInterval(recordTicker); recordTicker = null;
+        paintRecordButton();
+        const blob = new Blob(recordChunks, { type });
+        recordChunks = [];
+        if (!blob.size || !pdfPath) { toast('Nothing was recorded'); return; }
+        const ext = /ogg/.test(type) ? 'ogg' : /mp4|m4a/.test(type) ? 'm4a' : 'webm';
+        try {
+          await window.margin.saveAudio(pdfPath, new Uint8Array(await blob.arrayBuffer()), ext);
+          // only touch this document's sidecar if it is still the one on screen
+          if (State.path === pdfPath) {
+            State.audioDuration = seconds;
+            scheduleSave();
+            await loadLectureAudio();
+          }
+          toast(`Lecture recorded — ${fmtTime(seconds)}`);
+        } catch (err) { toast('Could not save the recording: ' + err.message); }
+      };
+      recorder.start(2000);
+      recordingPath = State.path;
+      recordStartedAt = Date.now();
+      recordTicker = setInterval(paintRecordButton, 500);
+      paintRecordButton();
+      toast('Recording — new notes will be timestamped');
+    }
+
+    function stopRecording() {
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+    }
+
+    // MediaRecorder's webm has no duration in its header until it is played
+    // through once, so trust the length we measured while recording.
+    function audioDuration() {
+      const el = $('#lecture-audio');
+      if (isFinite(el.duration) && el.duration > 0) return el.duration;
+      return State.audioDuration || 0;
+    }
+
+    async function loadLectureAudio() {
+      const el = $('#lecture-audio');
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      $('#audiobar').classList.add('hidden');
+      if (!hasShell || !State.path) return;
+      const found = await window.margin.audioPath(State.path);
+      if (!found) return;
+      // the app is itself a file:// page, so it can play the file directly;
+      // if that is ever blocked, fall back to pulling the bytes over IPC
+      el.onerror = async () => {
+        el.onerror = null;
+        const bytes = await window.margin.readAudio(found);
+        if (bytes) el.src = URL.createObjectURL(new Blob([bytes]));
+      };
+      el.src = 'file://' + encodeURI(found).replace(/#/g, '%23');
+      $('#audiobar').classList.remove('hidden');
+      paintAudioBar();
+    }
+
+    function paintAudioBar() {
+      const el = $('#lecture-audio');
+      const total = audioDuration();
+      $('#audio-play').textContent = el.paused ? '▶' : '❚❚';
+      $('#audio-time').textContent = fmtTime(el.currentTime) + ' / ' + fmtTime(total);
+      const seek = $('#audio-seek');
+      if (document.activeElement !== seek) {
+        seek.value = total ? Math.round((el.currentTime / total) * 1000) : 0;
+      }
+    }
+
+    function playAudioAt(seconds) {
+      const el = $('#lecture-audio');
+      if (!el.src) { toast('No recording for this lecture yet'); return; }
+      $('#audiobar').classList.remove('hidden');
+      try { el.currentTime = Math.max(0, seconds); } catch (e) { }
+      el.play().catch(err => toast('Could not play the recording: ' + err.message));
+    }
+
+    $('#recbtn').onclick = toggleRecording;
+    $('#audio-play').onclick = () => {
+      const el = $('#lecture-audio');
+      if (el.paused) el.play().catch(() => { }); else el.pause();
+      paintAudioBar();
+    };
+    $('#audio-seek').addEventListener('input', () => {
+      const total = audioDuration();
+      if (!total) return;
+      const el = $('#lecture-audio');
+      try { el.currentTime = (+$('#audio-seek').value / 1000) * total; } catch (e) { }
+      paintAudioBar();
+    });
+    ['timeupdate', 'play', 'pause', 'loadedmetadata', 'durationchange', 'ended']
+      .forEach(ev => $('#lecture-audio').addEventListener(ev, paintAudioBar));
 
     /* ------------------------------------------------------------------ *
      *  settings — theme, accent color, note text size
@@ -1874,7 +2427,11 @@
     function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
     async function saveNow() {
       if (!State.key) return;
-      const payload = { version: 1, pdf: State.name, scale: State.scale, notes: State.notes, highlights: State.highlights };
+      const payload = {
+        version: 1, pdf: State.name, scale: State.scale,
+        notes: State.notes, highlights: State.highlights,
+        audio: State.audioDuration ? { duration: State.audioDuration } : undefined
+      };
       try {
         if (hasShell && State.path) await window.margin.saveNotes(State.path, payload);
         else localStorage.setItem('margin:' + State.key, JSON.stringify(payload));
@@ -1882,6 +2439,7 @@
     }
     async function loadNotes() {
       State.highlights = [];
+      State.audioDuration = 0;
       try {
         let data = null;
         if (hasShell && State.path) data = await window.margin.loadNotes(State.path);
@@ -1892,6 +2450,7 @@
         if (data && Array.isArray(data.notes)) {
           if (data.scale) State.scale = data.scale;
           if (Array.isArray(data.highlights)) State.highlights = data.highlights;
+          if (data.audio && data.audio.duration) State.audioDuration = data.audio.duration;
           return data.notes;
         }
       } catch (e) { }
@@ -1909,6 +2468,7 @@
      * ------------------------------------------------------------------ */
     async function openBytes(bytes, name, path) {
       setMode('pdf');
+      stopRecording(); // a recording belongs to the lecture it was started in
       State.name = name || 'document.pdf'; State.path = path || null;
       State.key = path || fingerprint(bytes);
       State.activeFile = path ? { type: 'pdf', path } : null;
@@ -1920,6 +2480,7 @@
       const n = State.notes.length;
       toast(n ? `${n} note${n > 1 ? 's' : ''} restored` : `${State.doc.numPages} pages ready`);
       renderTree();
+      loadLectureAudio();
     }
     async function pickFile() {
       if (hasShell) {
@@ -1942,6 +2503,12 @@
       pagesEl.classList.toggle('hidden', mode !== 'pdf');
       $('#notefile').classList.toggle('hidden', mode !== 'note');
       if (mode !== 'pdf' && io) { io.disconnect(); io = null; }
+      // the recording belongs to a PDF, so its player goes away with the PDF
+      if (mode !== 'pdf') {
+        const audio = $('#lecture-audio');
+        if (audio) audio.pause();
+        $('#audiobar').classList.add('hidden');
+      }
     }
 
     /* ------------------------------------------------------------------ *
@@ -2072,13 +2639,7 @@
       });
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          if (moveSnippetTab(source) || expandSnippet(source, false)) return;
-          source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
-          source.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
+        if (handleMathKey(source, e)) return;
         if (e.key === 'Escape') { e.preventDefault(); finish(); surface.focus(); }
       });
       rendered.addEventListener('click', edit);
@@ -2380,13 +2941,15 @@
           if (!moved) return; // a plain click, not a drag — no-op, same as before
           const x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
           const y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
-          State.highlights.push({
+          const mark = {
             id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
             page: p.num,
             x0: Math.min(x, startX), x1: Math.max(x, startX),
             y0: y0 + Math.min(y, startY) * (y1 - y0),
             y1: y0 + Math.max(y, startY) * (y1 - y0)
-          });
+          };
+          stampNow(mark);
+          State.highlights.push(mark);
           layoutPage(p); scheduleSave();
         };
         window.addEventListener('mousemove', onMove);
@@ -2409,6 +2972,14 @@
       head.className = 'note-head';
       head.innerHTML = `<span>page ${note.page} · ${Math.round(note.y * 100)}%</span>
     <span class="grow"></span>`;
+      if (note.t != null) {
+        const at = document.createElement('button');
+        at.className = 'at';
+        at.textContent = '▶ ' + fmtTime(note.t);
+        at.title = 'Play the lecture from the moment this note was written';
+        at.onclick = () => playAudioAt(note.t);
+        head.appendChild(at);
+      }
       const del = document.createElement('button');
       del.textContent = 'delete'; del.title = 'Delete this note';
       del.onclick = () => deleteNote(note.id);
@@ -2443,13 +3014,7 @@
       });
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          if (moveSnippetTab(source) || expandSnippet(source, false)) return;
-          source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
-          source.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
+        if (handleMathKey(source, e)) return;
         if (e.key === 'Escape') {
           e.preventDefault(); finish(); surface.focus();
         }
@@ -2471,6 +3036,7 @@
         id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         page: h.page, y: +h.y.toFixed(5), x: +h.x.toFixed(3), md: '', collapsed: false
       };
+      stampNow(note); // anchors the note to this moment in the lecture recording
       State.notes.push(note);
       layoutPage(State.pages[h.page - 1]);
       scheduleSave();
@@ -2892,7 +3458,11 @@
     $('#openbtn2').onclick = pickFile;
     $('#openfolderbtn').onclick = () => openFolder();
     $('#openfolderbtn2').onclick = () => openFolder();
-    if (!hasShell) { $('#openfolderbtn').style.display = 'none'; $('#openfolderbtn2').style.display = 'none'; }
+    if (!hasShell) {
+      $('#openfolderbtn').style.display = 'none';
+      $('#openfolderbtn2').style.display = 'none';
+      $('#recbtn').style.display = 'none'; // recordings need a folder to live in
+    }
     $('#helpbtn').onclick = () => $('#help').classList.toggle('hidden');
     $('#help').onclick = e => { if (e.target.id === 'help') $('#help').classList.add('hidden'); };
 

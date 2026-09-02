@@ -68,6 +68,30 @@ ipcMain.handle('save-notes', async (_e, p, data) => {
   return true;
 });
 
+// ---- lecture audio: lecture.pdf -> lecture.margin.webm, alongside the notes ----
+
+const AUDIO_EXTS = ['webm', 'ogg', 'm4a', 'mp3', 'wav'];
+const audioBase = p => p.replace(/\.pdf$/i, '') + '.margin.';
+
+ipcMain.handle('audio-path', async (_e, p) => {
+  for (const ext of AUDIO_EXTS) {
+    const target = audioBase(p) + ext;
+    try { await fs.access(target); return target; } catch { }
+  }
+  return null;
+});
+
+ipcMain.handle('save-audio', async (_e, p, bytes, ext) => {
+  const target = audioBase(p) + (AUDIO_EXTS.includes(ext) ? ext : 'webm');
+  await fs.writeFile(target + '.tmp', Buffer.from(bytes));
+  await fs.rename(target + '.tmp', target);
+  return target;
+});
+
+ipcMain.handle('read-audio', async (_e, p) => {
+  try { return new Uint8Array(await fs.readFile(p)); } catch { return null; }
+});
+
 // ---- folder / file-tree (the "open a vault" side of the app) ----
 
 ipcMain.handle('open-folder', async () => {
@@ -76,11 +100,15 @@ ipcMain.handle('open-folder', async () => {
   return res.filePaths[0];
 });
 
+// Margin's own storage for a PDF (notes sidecar, lecture recording) sits next
+// to it on disk on purpose, but it is not a document — keep it out of the tree.
+const isSidecar = name => /\.margin\.(json|webm|ogg|m4a|mp3|wav)$/i.test(name);
+
 ipcMain.handle('read-dir', async (_e, dir) => {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     return entries
-      .filter(e => !e.name.startsWith('.'))
+      .filter(e => !e.name.startsWith('.') && !isSidecar(e.name))
       .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
       .sort((a, b) => a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name));
   } catch { return []; }

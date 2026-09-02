@@ -20,5 +20,10 @@ contextBridge.exposeInMainWorld('margin', {
   deletePath:   (p, isDir)    => ipcRenderer.invoke('delete-path', p, isDir),
 
   // search
-  walkDir:      root          => ipcRenderer.invoke('walk-dir', root)
+  walkDir:      root          => ipcRenderer.invoke('walk-dir', root),
+
+  // lecture audio
+  audioPath:    p                  => ipcRenderer.invoke('audio-path', p),
+  saveAudio:    (p, bytes, ext)    => ipcRenderer.invoke('save-audio', p, bytes, ext),
+  readAudio:    p                  => ipcRenderer.invoke('read-audio', p)
 });
