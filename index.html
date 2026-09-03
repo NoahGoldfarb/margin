@@ -325,8 +325,17 @@
 
     #tree {
       flex: 1;
-      overflow-y: auto;
+      overflow: auto;
       padding: 6px 0
+    }
+
+    #tree::-webkit-scrollbar {
+      width: 10px;
+      height: 10px
+    }
+
+    #tree::-webkit-scrollbar-corner {
+      background: transparent
     }
 
     .tree-row {
@@ -336,6 +345,10 @@
       margin: 0 6px;
       padding: 3px 8px;
       border-radius: 5px;
+      /* deeply nested names stay readable: the tree scrolls sideways rather
+         than squeezing the label into nothing */
+      width: max-content;
+      min-width: calc(100% - 12px);
       cursor: pointer;
       white-space: nowrap;
       color: var(--chrome-text);
@@ -2951,6 +2964,13 @@
       paintTabs(); renderTree(); rememberTabs();
     }
 
+    // week01/notes.md and week02/notes.md must not look like the same tab
+    function tabLabel(tab) {
+      if (!tab.path || !tabs.some(t => t !== tab && t.name === tab.name)) return tab.name;
+      const parent = tab.path.split('/').slice(-2, -1)[0];
+      return parent ? parent + '/' + tab.name : tab.name;
+    }
+
     function paintTabs() {
       const bar = $('#tabbar');
       bar.innerHTML = '';
@@ -2960,7 +2980,7 @@
         el.className = 'tab ' + kind + (tab.id === activeTabId ? ' active' : '');
         el.title = tab.path || tab.name;
         const dot = document.createElement('span'); dot.className = 'dot';
-        const label = document.createElement('span'); label.className = 'label'; label.textContent = tab.name;
+        const label = document.createElement('span'); label.className = 'label'; label.textContent = tabLabel(tab);
         const close = document.createElement('button');
         close.className = 'close'; close.textContent = '×'; close.title = 'Close';
         close.onclick = e => { e.stopPropagation(); closeTab(tab.id); };
@@ -3014,6 +3034,25 @@
       if (hasShell) return (await window.margin.getWorkspace()).folder || null;
       return localStorage.getItem('margin:last-folder');
     }
+    // which folders were open is part of the workspace too — nobody wants to
+    // drill back down four levels every launch
+    function rememberExpanded() {
+      if (hasShell) window.margin.setWorkspace({ expanded: [...expandedDirs] });
+    }
+
+    async function restoreExpanded(list) {
+      if (!Array.isArray(list) || !State.folder) return;
+      // shallowest first, so each level's children are there for the next
+      for (const dir of [...list].sort((a, b) => a.split('/').length - b.split('/').length)) {
+        if (!dir.startsWith(State.folder + '/') && dir !== State.folder) continue;
+        const entries = await window.margin.readDir(dir);
+        if (entries === null) continue; // folder has gone away since
+        treeCache.set(dir, entries);
+        expandedDirs.add(dir);
+      }
+      renderTree();
+    }
+
     // the open tabs are part of the workspace too, so a quit brings them back
     function rememberTabs() {
       if (!hasShell) return;
@@ -3039,6 +3078,7 @@
       document.body.classList.add('has-folder');
       $('#sidebar-name').textContent = dir.split('/').filter(Boolean).pop() || dir;
       await rememberFolder(dir);
+      rememberExpanded(); // a fresh folder starts fully collapsed
       renderTree();
       if (!State.activeFile) { setMode('empty'); }
     }
@@ -3094,6 +3134,7 @@
         if (expandedDirs.has(entry.path)) expandedDirs.delete(entry.path);
         else { expandedDirs.add(entry.path); await ensureDirLoaded(entry.path); }
         renderTree();
+        rememberExpanded();
         return;
       }
       const ext = extOf(entry.name);
@@ -3210,8 +3251,52 @@
       const dir = dirOf(entry.path), to = dir + '/' + name;
       const ok = await window.margin.renamePath(entry.path, to);
       if (!ok) { toast('Rename failed'); return; }
-      if (State.activeFile && State.activeFile.path === entry.path) State.activeFile.path = to;
+      retargetPaths(entry.path, to, entry.isDir);
       await invalidateAndReload(dir);
+      if (State.activeFile) $('#docname').textContent = State.activeFile.path.split('/').pop();
+    }
+
+    // Renaming or deleting a folder moves everything underneath it. Anything
+    // holding a path — open tabs, the live document, the tree caches — has to
+    // follow, or it silently points at a file that is no longer there.
+    const isUnder = (p, root, isDir) => p === root || (isDir && p.startsWith(root + '/'));
+
+    function retargetPaths(from, to, isDir) {
+      const remap = p => p === from ? to : to + p.slice(from.length);
+      for (const tab of tabs) {
+        if (!tab.path || !isUnder(tab.path, from, isDir)) continue;
+        tab.path = remap(tab.path);
+        tab.name = tab.path.split('/').pop();
+        if (tab.key) tab.key = tab.path;
+      }
+      if (State.path && isUnder(State.path, from, isDir)) {
+        State.path = remap(State.path);
+        State.key = State.path;
+      }
+      if (State.activeFile && isUnder(State.activeFile.path, from, isDir)) {
+        State.activeFile.path = remap(State.activeFile.path);
+      }
+      for (const key of [...treeCache.keys()]) {
+        if (!isUnder(key, from, isDir)) continue;
+        treeCache.set(remap(key), treeCache.get(key));
+        treeCache.delete(key);
+      }
+      for (const entries of treeCache.values()) {
+        for (const e of entries) if (isUnder(e.path, from, isDir)) e.path = remap(e.path);
+      }
+      for (const key of [...expandedDirs]) {
+        if (!isUnder(key, from, isDir)) continue;
+        expandedDirs.delete(key); expandedDirs.add(remap(key));
+      }
+      paintTabs(); rememberTabs();
+    }
+
+    async function closeTabsUnder(root, isDir) {
+      for (const tab of tabs.filter(t => t.path && isUnder(t.path, root, isDir))) {
+        await closeTab(tab.id, { silent: true });
+      }
+      for (const key of [...treeCache.keys()]) if (isUnder(key, root, isDir)) treeCache.delete(key);
+      for (const key of [...expandedDirs]) if (isUnder(key, root, isDir)) expandedDirs.delete(key);
     }
 
     async function deleteEntry(entry) {
@@ -3221,12 +3306,7 @@
       const ok = await window.margin.deletePath(entry.path, entry.isDir);
       if (!ok) { toast('Could not delete ' + entry.name); return; }
       toast(`${entry.name} moved to the Trash`);
-      if (State.activeFile && (State.activeFile.path === entry.path ||
-        (entry.isDir && State.activeFile.path.startsWith(entry.path + '/')))) {
-        State.activeFile = null; State.doc = null;
-        $('#docname').textContent = 'No file open'; $('#pageinfo').textContent = '';
-        setMode('empty');
-      }
+      await closeTabsUnder(entry.path, entry.isDir);
       await invalidateAndReload(dirOf(entry.path));
     }
 
@@ -4072,7 +4152,10 @@
       if (hasShell) {
         localStorage.removeItem('margin:last-folder'); // the shell owns this now
         const saved = await window.margin.getWorkspace();
-        if (saved.folder) await openFolder(saved.folder);
+        if (saved.folder) {
+          await openFolder(saved.folder);
+          await restoreExpanded(saved.expanded);
+        }
         // Tabs come back as empty shells and load when you click them, so a
         // workspace of twenty lectures still starts instantly.
         if (!openedFromArg && Array.isArray(saved.tabs)) {

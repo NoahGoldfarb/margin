@@ -13,7 +13,7 @@ const cliPath = process.argv.slice(1).find(a => /\.pdf$/i.test(a)) || null;
  *  workspace, closing the window ends it. Only the main process can tell
  *  those apart, so it owns the state rather than the page.
  * ------------------------------------------------------------------------ */
-let workspace = { folder: null, tabs: [], active: null };
+let workspace = { folder: null, tabs: [], active: null, expanded: [] };
 let isQuitting = false;
 const statePath = () => path.join(app.getPath('userData'), 'window-state.json');
 
@@ -23,9 +23,10 @@ async function loadWindowState() {
     workspace = {
       folder: saved.folder || null,
       tabs: Array.isArray(saved.tabs) ? saved.tabs : [],
-      active: saved.active || null
+      active: saved.active || null,
+      expanded: Array.isArray(saved.expanded) ? saved.expanded : []
     };
-  } catch { workspace = { folder: null, tabs: [], active: null }; }
+  } catch { workspace = { folder: null, tabs: [], active: null, expanded: [] }; }
 }
 // written synchronously: this is called from window 'close', where the app may
 // be on its way out and an awaited write could lose the race
@@ -85,7 +86,7 @@ function createWindow() {
     if (isQuitting) return;
     // where closing the last window quits the app, that close *is* the quit
     if (process.platform !== 'darwin' && BrowserWindow.getAllWindows().length <= 1) return;
-    workspace = { folder: null, tabs: [], active: null };
+    workspace = { folder: null, tabs: [], active: null, expanded: [] };
     saveWindowState();
   });
   win.loadFile(path.join(__dirname, 'index.html'));
@@ -195,7 +196,10 @@ ipcMain.handle('read-dir', async (_e, dir) => {
     return entries
       .filter(e => !e.name.startsWith('.') && !isSidecar(e.name))
       .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
-      .sort((a, b) => a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name));
+      // numeric so lecture2 sorts before lecture10, which is the whole point
+      // of numbering your lectures
+      .sort((a, b) => a.isDir !== b.isDir ? (a.isDir ? -1 : 1)
+        : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   } catch { return null; }
 });
 
