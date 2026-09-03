@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 
@@ -143,9 +143,26 @@ ipcMain.handle('rename-path', async (_e, from, to) => {
   catch { return false; }
 });
 
+// Prefer the system Trash so a mistaken delete is recoverable; fall back to a
+// real delete only where there is no trash implementation.
+async function discard(target, { mustExist = true } = {}) {
+  try { await fs.access(target); }
+  catch { if (mustExist) throw new Error('not found'); return; }
+  try { await shell.trashItem(target); }
+  catch { await fs.rm(target, { recursive: true, force: true }); }
+}
+
 ipcMain.handle('delete-path', async (_e, p, isDir) => {
-  try { await fs.rm(p, { recursive: !!isDir }); return true; }
-  catch { return false; }
+  try {
+    await discard(p);
+    // a PDF's notes and recording are hidden from the tree, so they would be
+    // invisible litter if left behind — they go with the document
+    if (!isDir && /\.pdf$/i.test(p)) {
+      await discard(sidecar(p), { mustExist: false });
+      for (const ext of AUDIO_EXTS) await discard(audioBase(p) + ext, { mustExist: false });
+    }
+    return true;
+  } catch { return false; }
 });
 
 // ---- search — recursively list every pdf/md/markdown/txt under a folder ----

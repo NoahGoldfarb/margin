@@ -47,6 +47,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Alt+↑` / `Alt+↓` | Previous / next note, anywhere in the document |
 | `Alt+Enter` | Hide the source, keep only the rendered note |
 | `Ctrl+Shift+⌫` | Delete the note you are in |
+| `Cmd+⌫` / `Ctrl+⌫` | Move the open file to the Trash |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
@@ -132,6 +133,10 @@ $$\frac{\partial u}{\partial t} = \alpha \nabla^2 u$$
 
 Each note stores the page number and its position on that page as a fraction
 of the page height, so it stays on the right line at any zoom level.
+
+Deleting a file — `Cmd+⌫`, or right-click in the sidebar — moves it to the
+system Trash rather than erasing it, and a PDF takes its notes and recording
+along with it so nothing is left orphaned.
 
 Notes are written next to the PDF as `lecture.margin.json` while you type
 (debounced, written atomically). Move the PDF and the notes travel with it;

@@ -1588,6 +1588,8 @@
         <dd>Configure snippets such as <code>mk</code> and <code>frac</code></dd>
         <dt>Ctrl+Shift+⌫</dt>
         <dd>Delete the note you are in</dd>
+        <dt>Cmd+⌫ / Ctrl+⌫</dt>
+        <dd>Delete the open file (a PDF takes its notes and recording with it)</dd>
         <dt>Ctrl+O</dt>
         <dd>Open a PDF</dd>
         <dt>Ctrl+Shift+O</dt>
@@ -2861,9 +2863,12 @@
     }
 
     async function deleteEntry(entry) {
-      if (!confirm(`Delete "${entry.name}"? This cannot be undone.`)) return;
+      const extra = !entry.isDir && /\.pdf$/i.test(entry.name)
+        ? '\n\nIts notes and any lecture recording go with it.' : '';
+      if (!confirm(`Move "${entry.name}" to the Trash?${extra}`)) return;
       const ok = await window.margin.deletePath(entry.path, entry.isDir);
-      if (!ok) { toast('Delete failed'); return; }
+      if (!ok) { toast('Could not delete ' + entry.name); return; }
+      toast(`${entry.name} moved to the Trash`);
       if (State.activeFile && (State.activeFile.path === entry.path ||
         (entry.isDir && State.activeFile.path.startsWith(entry.path + '/')))) {
         State.activeFile = null; State.doc = null;
@@ -3164,6 +3169,12 @@
         if (handleMathKey(source, e)) return;
         if (e.key === 'Escape') {
           e.preventDefault(); finish(); surface.focus();
+        }
+        // documented in the key list: drop the note you are standing in
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'Backspace' || e.key === 'Delete')) {
+          e.preventDefault();
+          source.removeEventListener('blur', finish); // it is about to be gone
+          deleteNote(note.id);
         }
       });
       rendered.addEventListener('click', edit);
@@ -3598,8 +3609,22 @@
         if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
           e.preventDefault(); hopNote(e.key === 'ArrowDown' ? 1 : -1, null); return;
         }
+        // Cmd/Ctrl+Delete removes the open file. Deliberately outside the
+        // editor: in a text field the same chord means "delete to line start".
+        if (mod && (e.key === 'Backspace' || e.key === 'Delete')) {
+          e.preventDefault();
+          deleteActiveFile();
+          return;
+        }
       }
     }, true);
+
+    function deleteActiveFile() {
+      if (!hasShell) { toast('Deleting files needs the desktop app'); return; }
+      const active = State.activeFile;
+      if (!active) { toast('No file open to delete'); return; }
+      deleteEntry({ name: active.path.split('/').pop(), path: active.path, isDir: false });
+    }
 
     $('#openbtn').onclick = pickFile;
     $('#openbtn2').onclick = pickFile;
