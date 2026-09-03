@@ -51,6 +51,8 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+W` / `Ctrl+W` | Close the tab, then the window when none are left |
 | `Ctrl+Tab` | Next tab (`Ctrl+Shift+Tab` for the previous) |
 | `Cmd+1…9` | Jump to a tab by position |
+| `Cmd+\` / `Ctrl+\` | Split the view in two |
+| `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
@@ -120,6 +122,13 @@ click, or `Cmd+W`.
 Each tab keeps its own document: a PDF holds its own notes, highlights, zoom
 level, rendered pages and scroll position, so coming back to a lecture is
 instant and lands exactly where you left it.
+
+`Cmd+\` splits the view in two, each half with its own tabs — the textbook
+beside the lecture slides, or the slides beside your notes. Whichever half you
+last clicked or scrolled is the live one: it takes your typing, Ctrl-clicks and
+highlights, and it is marked with an accent line under its tab bar while the
+other half dims. `Cmd+Alt+←/→` moves between them, and closing the last tab in
+a half collapses it back to a single view.
 
 Margin follows VS Code for the window itself. `Cmd+W` closes the current tab,
 and once no tabs are left it closes the window; `Cmd+Shift+W` closes the window

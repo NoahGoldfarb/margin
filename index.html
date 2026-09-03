@@ -58,19 +58,19 @@
     }
 
     /* dark, unobtrusive scrollbars instead of the default light ones */
-    #surface::-webkit-scrollbar,
+    .pane-surface::-webkit-scrollbar,
     #tree::-webkit-scrollbar,
     #latex-settings .card::-webkit-scrollbar {
       width: 10px
     }
 
-    #surface::-webkit-scrollbar-track,
+    .pane-surface::-webkit-scrollbar-track,
     #tree::-webkit-scrollbar-track,
     #latex-settings .card::-webkit-scrollbar-track {
       background: transparent
     }
 
-    #surface::-webkit-scrollbar-thumb,
+    .pane-surface::-webkit-scrollbar-thumb,
     #tree::-webkit-scrollbar-thumb,
     #latex-settings .card::-webkit-scrollbar-thumb {
       background: var(--rule);
@@ -78,7 +78,7 @@
       border: 2px solid var(--ink);
     }
 
-    #surface::-webkit-scrollbar-thumb:hover,
+    .pane-surface::-webkit-scrollbar-thumb:hover,
     #tree::-webkit-scrollbar-thumb:hover,
     #latex-settings .card::-webkit-scrollbar-thumb:hover {
       background: #3A4657
@@ -154,13 +154,58 @@
       outline-offset: 2px
     }
 
-    /* ---------- tab bar ---------- */
-    #tabbar {
+    /* ---------- panes and tab bars ---------- */
+    #workarea {
       position: absolute;
       top: 34px;
       left: 0;
       right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    body.has-folder #workarea {
+      left: 240px
+    }
+
+    .pane {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .pane+.pane {
+      border-left: 1px solid var(--rule)
+    }
+
+    /* the surface is focusable so it can take key events, but it is a scroll
+       area, not a control — a focus ring on it would mark the wrong pane */
+    .pane-surface:focus,
+    .pane-surface:focus-visible {
+      outline: none
+    }
+
+    /* which half your keystrokes land in: only the focused pane's active tab
+       keeps the accent, so two "active" tabs never compete for attention */
+    body.split .pane.focused .pane-tabs {
+      border-bottom-color: var(--pen)
+    }
+
+    body.split .pane:not(.focused) .tab.active {
+      border-top-color: var(--rule);
+      color: var(--chrome-text);
+    }
+
+    body.split .pane:not(.focused) .pane-surface {
+      opacity: .78
+    }
+
+    .pane-tabs {
       height: 32px;
+      flex: 0 0 32px;
       display: none;
       align-items: stretch;
       background: var(--ink);
@@ -168,24 +213,21 @@
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
-      z-index: 6;
     }
 
-    #tabbar::-webkit-scrollbar {
+    .pane-tabs::-webkit-scrollbar {
       display: none
     }
 
-    body.has-tabs #tabbar {
+    .pane.has-tabs .pane-tabs {
       display: flex
     }
 
-    body.has-folder #tabbar {
-      left: 240px
-    }
-
-    body.has-tabs #surface,
-    body.has-tabs #drop {
-      top: 66px
+    .pane-surface {
+      flex: 1;
+      overflow-y: auto;
+      scroll-behavior: auto;
+      padding: 18px 0 55vh;
     }
 
     .tab {
@@ -876,33 +918,21 @@
     }
 
     /* ---------- viewer ---------- */
-    #surface {
-      position: absolute;
-      top: 34px;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      overflow-y: auto;
-      scroll-behavior: auto;
-      padding: 18px 0 55vh;
-    }
-
-    body.has-folder #surface,
     body.has-folder #drop {
       left: 240px
     }
 
-    #pages.hidden {
+    .pane-pages.hidden {
       display: none
     }
 
     /* ---------- standalone note file (Obsidian-style) ---------- */
-    #notefile {
+    .pane-note {
       display: flex;
       justify-content: center;
     }
 
-    #notefile.hidden {
+    .pane-note.hidden {
       display: none
     }
 
@@ -944,7 +974,7 @@
     }
 
     /* beats .note-render's min-height: 1.5em, which is declared later in the sheet */
-    #notefile .notefile-render {
+    .pane-note .notefile-render {
       min-height: calc(100vh - 34px - 60px - 112px);
     }
 
@@ -1661,8 +1691,6 @@
     <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
   </div>
 
-  <div id="tabbar"></div>
-
   <div id="sidebar">
     <div id="sidebar-head">
       <span class="name" id="sidebar-name">Folder</span>
@@ -1671,23 +1699,17 @@
     <div id="tree"></div>
   </div>
 
-  <div id="surface" tabindex="0">
-    <div id="drop">
-      <h1>Drop a lecture PDF here</h1>
-      <p>Ctrl-click anywhere on a page. The page opens at that
-        exact line and a note starts there, in Markdown with LaTeX.</p>
-      <p>
-        <button class="chip" id="openbtn2">Open a PDF</button>
-        <button class="chip" id="openfolderbtn2">Open a folder</button>
-      </p>
-    </div>
-    <div id="pages"></div>
-    <div id="notefile" class="hidden">
-      <div class="notefile-page">
-        <textarea id="notefile-src" class="notefile-src" spellcheck="false" placeholder="Start writing…" hidden></textarea>
-        <div id="notefile-render" class="note-render notefile-render"></div>
-      </div>
-    </div>
+  <!-- panes are built here at runtime; a split adds a second one -->
+  <div id="workarea"></div>
+
+  <div id="drop">
+    <h1>Drop a lecture PDF here</h1>
+    <p>Ctrl-click anywhere on a page. The page opens at that
+      exact line and a note starts there, in Markdown with LaTeX.</p>
+    <p>
+      <button class="chip" id="openbtn2">Open a PDF</button>
+      <button class="chip" id="openfolderbtn2">Open a folder</button>
+    </p>
   </div>
 
   <div id="help" class="hidden">
@@ -1716,6 +1738,10 @@
         <dd>Close the tab — and the window once no tabs are left</dd>
         <dt>Ctrl+Tab</dt>
         <dd>Next tab (add Shift for the previous one)</dd>
+        <dt>Cmd+\ / Ctrl+\</dt>
+        <dd>Split the view in two — a textbook beside the lecture</dd>
+        <dt>Cmd+Alt+← / →</dt>
+        <dd>Move between the two halves</dd>
         <dt>Cmd+1…9</dt>
         <dd>Jump to a tab by position; 9 is the last one</dd>
         <dt>Ctrl+O</dt>
@@ -1888,7 +1914,9 @@
     };
     const isMac = navigator.platform.toLowerCase().includes('mac');
     const $ = s => document.querySelector(s);
-    const surface = $('#surface'), pagesEl = $('#pages');
+    // These follow the focused pane, so the rest of the app can keep talking
+    // about "the surface" and "the pages" without knowing about splits.
+    let surface = null, pagesEl = null;
 
     /* ------------------------------------------------------------------ *
      *  appearance — themes, accent color, note text size
@@ -2757,9 +2785,9 @@
       tab.container.className = 'doc';
       tab.container.dataset.tab = String(tab.id);
       pagesEl.appendChild(tab.container);
-      tabs.push(tab);
-      activeTabId = tab.id;
-      document.body.classList.add('has-tabs');
+      focusedPane.tabs.push(tab);
+      focusedPane.activeTabId = tab.id;
+      focusedPane.el.classList.add('has-tabs');
 
       State.name = tab.name; State.path = tab.path;
       State.key = path || fingerprint(bytes);
@@ -2803,12 +2831,129 @@
      *  A PDF keeps its rendered pages in its own container so coming back to
      *  it is instant; note tabs share the one editor and just swap text.
      * ------------------------------------------------------------------ */
-    let tabs = [];
-    let activeTabId = null;
+    /* Panes: one by default, two after a split. Only the focused pane's
+     * active tab is the live document, which keeps State meaning exactly what
+     * it always did. Interacting with a pane focuses it, and switching is just
+     * the checkpoint/restore below, so it is effectively instant. */
+    let panes = [];
+    let focusedPane = null;
+    let paneSeq = 0;
     let tabSeq = 0;
+    let tabs = [];   // alias for focusedPane.tabs (same array, so mutation works)
 
-    const activeTab = () => tabs.find(t => t.id === activeTabId) || null;
+    const activeTab = () => focusedPane && focusedPane.tabs.find(t => t.id === focusedPane.activeTabId) || null;
     const tabForPath = p => tabs.find(t => t.path && t.path === p) || null;
+    const anyTabs = () => panes.some(p => p.tabs.length);
+
+    function createPane() {
+      const pane = { id: ++paneSeq, tabs: [], activeTabId: null };
+      const el = document.createElement('div');
+      el.className = 'pane';
+      const tabbar = document.createElement('div'); tabbar.className = 'pane-tabs';
+      const paneSurface = document.createElement('div');
+      paneSurface.className = 'pane-surface'; paneSurface.tabIndex = 0;
+      const pages = document.createElement('div'); pages.className = 'pane-pages';
+      const note = document.createElement('div'); note.className = 'pane-note hidden';
+      const notePage = document.createElement('div'); notePage.className = 'notefile-page';
+      const src = document.createElement('textarea');
+      src.className = 'notefile-src'; src.spellcheck = false;
+      src.placeholder = 'Start writing…'; src.hidden = true;
+      const rendered = document.createElement('div');
+      rendered.className = 'note-render notefile-render';
+      notePage.append(src, rendered);
+      note.appendChild(notePage);
+      paneSurface.append(pages, note);
+      el.append(tabbar, paneSurface);
+      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered });
+
+      // the pane you touch is the pane you are working in
+      paneSurface.addEventListener('mousedown', () => focusPane(pane));
+      tabbar.addEventListener('mousedown', () => focusPane(pane));
+      paneSurface.addEventListener('scroll', () => {
+        if (focusedPane !== pane) focusPane(pane);
+        updatePageInfo();
+      }, { passive: true });
+
+      initNoteEditor(pane);
+      $('#workarea').appendChild(el);
+      panes.push(pane);
+      return pane;
+    }
+
+    let focusSeq = 0;
+
+    // handover:false when the caller is about to restore a document itself
+    // (activateTab), so the two do not race to own the live State
+    function focusPane(pane, { handover = true } = {}) {
+      if (!pane || focusedPane === pane) return;
+      const outgoing = focusedPane;
+      const token = ++focusSeq;
+      focusedPane = pane;
+      surface = pane.surface;
+      pagesEl = pane.pages;
+      tabs = pane.tabs;
+      for (const p of panes) p.el.classList.toggle('focused', p === pane);
+      if (!outgoing || !handover) return;
+      // hand the live document over to whatever this pane has open
+      (async () => {
+        await checkpointActive(outgoing);
+        if (token !== focusSeq) return; // a later focus change overtook us
+        const target = pane.tabs.find(t => t.id === pane.activeTabId);
+        if (target) {
+          if (!await loadTab(target)) return;
+          if (token !== focusSeq) return;
+          restoreTab(target);
+        } else clearLiveDocument();
+        paintTabs(pane);
+      })();
+    }
+
+    function clearLiveDocument() {
+      if (io) { io.disconnect(); io = null; }
+      Object.assign(State, {
+        doc: null, path: null, key: null, name: '', activeFile: null,
+        notes: [], highlights: [], pages: [], audioDuration: 0
+      });
+      $('#docname').textContent = 'No file open';
+      $('#pageinfo').textContent = '';
+      showDocContainer(null);
+      setMode('empty');
+    }
+
+    // Cmd+\ — put what you are looking at side by side with itself
+    async function splitPane() {
+      if (panes.length > 1) { toast('Already split'); return; }
+      const current = activeTab();
+      await checkpointActive();
+      const pane = createPane();
+      document.body.classList.add('split');
+      // handover:false — this function decides what the new pane shows, and a
+      // concurrent handover would race it (and could clear what we just opened)
+      focusPane(pane, { handover: false });
+      if (current && current.path) {
+        await openInTab(current.type, current.path, current.name, pane);
+      } else {
+        clearLiveDocument();
+        paintTabs(pane);
+      }
+    }
+
+    function closePane(pane) {
+      if (panes.length < 2) return;
+      pane.el.remove();
+      panes = panes.filter(p => p !== pane);
+      document.body.classList.remove('split');
+      const survivor = panes[0];
+      focusedPane = null;
+      focusPane(survivor, { handover: false });
+      const target = survivor.tabs.find(t => t.id === survivor.activeTabId);
+      if (target) activateTab(target.id, { pane: survivor });
+      else clearLiveDocument();
+      paintTabs(survivor);
+    }
+
+    // the window always has at least one pane
+    focusPane(createPane());
 
     function showDocContainer(tab) {
       for (const child of pagesEl.children) {
@@ -2824,11 +2969,12 @@
       if (noteSaveTimer) { clearTimeout(noteSaveTimer); noteSaveTimer = null; await saveNoteFile(); }
     }
 
-    async function checkpointActive() {
-      const tab = activeTab();
+    async function checkpointActive(pane = focusedPane) {
+      if (!pane) return;
+      const tab = pane.tabs.find(t => t.id === pane.activeTabId);
       if (!tab || !tab.loaded) return;
       await flushSaves();
-      tab.scrollTop = surface.scrollTop;
+      tab.scrollTop = pane.surface.scrollTop;
       if (tab.type === 'pdf') {
         Object.assign(tab, {
           doc: State.doc, path: State.path, key: State.key, name: State.name,
@@ -2836,7 +2982,7 @@
           scale: State.scale, audioDuration: State.audioDuration
         });
       } else {
-        tab.text = $('#notefile-src').value;
+        tab.text = pane.src.value;
       }
     }
 
@@ -2900,7 +3046,7 @@
           notes: [], highlights: [], pages: [], audioDuration: 0
         });
         $('#pageinfo').textContent = '';
-        const source = $('#notefile-src'), rendered = $('#notefile-render');
+        const source = focusedPane.src, rendered = focusedPane.rendered;
         source.value = tab.text || ''; source._snippetStops = null;
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
@@ -2909,104 +3055,107 @@
       surface.scrollTop = tab.scrollTop || 0;
     }
 
-    async function activateTab(id, { focus = true } = {}) {
-      const tab = tabs.find(t => t.id === id);
+    async function activateTab(id, { focus = true, pane = focusedPane } = {}) {
+      const tab = pane.tabs.find(t => t.id === id);
       if (!tab) return false;
-      if (activeTabId !== id) await checkpointActive();
-      activeTabId = id;
-      paintTabs();
-      if (!await loadTab(tab)) { closeTab(id, { silent: true }); return false; }
+      if (pane !== focusedPane) {
+        // save the pane we are leaving while its document is still the live one
+        await checkpointActive(focusedPane);
+        focusPane(pane, { handover: false });
+      }
+      if (pane.activeTabId !== id) await checkpointActive(pane);
+      pane.activeTabId = id;
+      paintTabs(pane);
+      if (!await loadTab(tab)) { closeTab(id, { silent: true, pane }); return false; }
       restoreTab(tab);
-      paintTabs(); renderTree(); rememberTabs();
-      if (focus) surface.focus();
+      paintTabs(pane); renderTree(); rememberTabs();
+      if (focus) pane.surface.focus();
       return true;
     }
 
     // opening a file that is already open just goes to it, like every editor
-    async function openInTab(type, path, name) {
-      const existing = tabForPath(path);
-      if (existing) return activateTab(existing.id);
+    async function openInTab(type, path, name, pane = focusedPane) {
+      const existing = pane.tabs.find(t => t.path === path);
+      if (existing) return activateTab(existing.id, { pane });
       const tab = {
         id: ++tabSeq, type, path,
         name: name || path.split('/').pop(),
         loaded: false, scrollTop: 0
       };
-      tabs.push(tab);
-      document.body.classList.add('has-tabs');
-      return activateTab(tab.id);
+      pane.tabs.push(tab);
+      pane.el.classList.add('has-tabs');
+      return activateTab(tab.id, { pane });
     }
 
-    async function closeTab(id, { silent = false } = {}) {
-      const index = tabs.findIndex(t => t.id === id);
+    async function closeTab(id, { silent = false, pane = focusedPane } = {}) {
+      const index = pane.tabs.findIndex(t => t.id === id);
       if (index < 0) return;
-      const tab = tabs[index];
-      if (id === activeTabId && !silent) await flushSaves();
+      const tab = pane.tabs[index];
+      if (id === pane.activeTabId && !silent) await flushSaves();
       if (tab.container) tab.container.remove();
       if (tab.type === 'pdf' && tab.pages) for (const p of tab.pages) p.bitmap = null;
-      tabs.splice(index, 1);
-      if (id === activeTabId) {
-        activeTabId = null;
-        const next = tabs[index] || tabs[index - 1];
-        if (next) { await activateTab(next.id); }
-        else {
-          if (io) { io.disconnect(); io = null; }
-          Object.assign(State, {
-            doc: null, path: null, key: null, name: '', activeFile: null,
-            notes: [], highlights: [], pages: [], audioDuration: 0
-          });
-          $('#docname').textContent = 'No file open';
-          $('#pageinfo').textContent = '';
-          showDocContainer(null);
-          setMode('empty');
-        }
+      pane.tabs.splice(index, 1);
+      if (id === pane.activeTabId) {
+        pane.activeTabId = null;
+        const next = pane.tabs[index] || pane.tabs[index - 1];
+        if (next) { await activateTab(next.id, { pane }); }
+        else if (panes.length > 1) { closePane(pane); return; } // an empty half collapses
+        else if (pane === focusedPane) clearLiveDocument();
       }
-      if (!tabs.length) document.body.classList.remove('has-tabs');
-      paintTabs(); renderTree(); rememberTabs();
+      if (!pane.tabs.length) pane.el.classList.remove('has-tabs');
+      paintTabs(pane); renderTree(); rememberTabs();
     }
 
     // week01/notes.md and week02/notes.md must not look like the same tab
-    function tabLabel(tab) {
-      if (!tab.path || !tabs.some(t => t !== tab && t.name === tab.name)) return tab.name;
+    function tabLabel(tab, list) {
+      if (!tab.path || !list.some(t => t !== tab && t.name === tab.name)) return tab.name;
       const parent = tab.path.split('/').slice(-2, -1)[0];
       return parent ? parent + '/' + tab.name : tab.name;
     }
 
-    function paintTabs() {
-      const bar = $('#tabbar');
+    function paintTabs(pane = focusedPane) {
+      if (!pane) return;
+      const bar = pane.tabbar;
       bar.innerHTML = '';
-      for (const tab of tabs) {
+      pane.el.classList.toggle('has-tabs', pane.tabs.length > 0);
+      for (const tab of pane.tabs) {
         const el = document.createElement('div');
         const kind = tab.type === 'pdf' ? 'file-pdf' : 'file-md';
-        el.className = 'tab ' + kind + (tab.id === activeTabId ? ' active' : '');
+        el.className = 'tab ' + kind + (tab.id === pane.activeTabId ? ' active' : '');
         el.title = tab.path || tab.name;
         const dot = document.createElement('span'); dot.className = 'dot';
-        const label = document.createElement('span'); label.className = 'label'; label.textContent = tabLabel(tab);
+        const label = document.createElement('span');
+        label.className = 'label'; label.textContent = tabLabel(tab, pane.tabs);
         const close = document.createElement('button');
         close.className = 'close'; close.textContent = '×'; close.title = 'Close';
-        close.onclick = e => { e.stopPropagation(); closeTab(tab.id); };
+        close.onclick = e => { e.stopPropagation(); closeTab(tab.id, { pane }); };
         el.append(dot, label, close);
-        el.onclick = () => activateTab(tab.id);
-        el.onauxclick = e => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } };
+        el.onclick = () => activateTab(tab.id, { pane });
+        el.onauxclick = e => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id, { pane }); } };
         bar.appendChild(el);
       }
       const current = bar.querySelector('.tab.active');
       if (current) current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      $('#drop').classList.toggle('hidden', anyTabs());
     }
 
     function cycleTab(step) {
-      if (tabs.length < 2) return;
-      const at = tabs.findIndex(t => t.id === activeTabId);
-      const next = tabs[(at + step + tabs.length) % tabs.length];
+      const list = focusedPane.tabs;
+      if (list.length < 2) return;
+      const at = list.findIndex(t => t.id === focusedPane.activeTabId);
+      const next = list[(at + step + list.length) % list.length];
       if (next) activateTab(next.id);
     }
 
     /* ------------------------------------------------------------------ *
      *  view modes — the surface shows exactly one of: drop / pdf / note
      * ------------------------------------------------------------------ */
-    function setMode(mode) {
-      $('#drop').classList.toggle('hidden', mode !== 'empty');
-      pagesEl.classList.toggle('hidden', mode !== 'pdf');
-      $('#notefile').classList.toggle('hidden', mode !== 'note');
+    function setMode(mode, pane = focusedPane) {
+      // the drop screen belongs to the window, not a pane: it is only right
+      // when nothing at all is open
+      $('#drop').classList.toggle('hidden', anyTabs());
+      pane.pages.classList.toggle('hidden', mode !== 'pdf');
+      pane.note.classList.toggle('hidden', mode !== 'note');
       if (mode !== 'pdf' && io) { io.disconnect(); io = null; }
       // the recording belongs to a PDF, so its player goes away with the PDF
       if (mode !== 'pdf') {
@@ -3056,7 +3205,10 @@
     // the open tabs are part of the workspace too, so a quit brings them back
     function rememberTabs() {
       if (!hasShell) return;
-      const open = tabs.filter(t => t.path).map(t => ({ type: t.type, path: t.path }));
+      const open = [];
+      panes.forEach((pane, index) => {
+        for (const t of pane.tabs) if (t.path) open.push({ type: t.type, path: t.path, pane: index });
+      });
       const current = activeTab();
       window.margin.setWorkspace({ tabs: open, active: current && current.path || null });
     }
@@ -3160,29 +3312,31 @@
     }
     async function saveNoteFile() {
       if (!State.activeFile || State.activeFile.type !== 'note') return;
-      try { await window.margin.writeText(State.activeFile.path, $('#notefile-src').value); }
+      try { await window.margin.writeText(State.activeFile.path, focusedPane.src.value); }
       catch (e) { toast('Note could not be saved: ' + e.message); }
     }
 
-    function initNoteFileEditor() {
-      const source = $('#notefile-src'), rendered = $('#notefile-render');
+    function initNoteEditor(pane) {
+      const source = pane.src, rendered = pane.rendered;
       const finish = () => {
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
       };
       const edit = () => {
+        focusPane(pane);
         source.hidden = false; rendered.hidden = true;
         source.focus();
         source.setSelectionRange(source.value.length, source.value.length);
         autoGrow(source);
       };
       source.addEventListener('input', () => {
-        updateSnippetStops(source); autoGrow(source); scheduleNoteSave();
+        updateSnippetStops(source); autoGrow(source);
+        if (focusedPane === pane) scheduleNoteSave();
       });
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
         if (handleMathKey(source, e)) return;
-        if (e.key === 'Escape') { e.preventDefault(); finish(); surface.focus(); }
+        if (e.key === 'Escape') { e.preventDefault(); finish(); pane.surface.focus(); }
       });
       rendered.addEventListener('click', edit);
     }
@@ -3233,7 +3387,7 @@
       expandedDirs.add(dir);
       await invalidateAndReload(dir);
       await openNoteFile(p);
-      $('#notefile-render').click(); // jump straight into editing a blank note
+      focusedPane.rendered.click(); // jump straight into editing a blank note
     }
 
     async function newFolderIn(dir) {
@@ -4013,6 +4167,13 @@
 
       if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch(); return; }
       if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
+      if (mod && e.key === '\\') { e.preventDefault(); splitPane(); return; }
+      if (mod && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        const at = panes.indexOf(focusedPane);
+        focusPane(panes[e.key === 'ArrowRight' ? at + 1 : at - 1] || focusedPane);
+        return;
+      }
       if (mod && !e.shiftKey && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const target = e.key === '9' ? tabs[tabs.length - 1] : tabs[+e.key - 1];
@@ -4085,7 +4246,7 @@
       buildPages(); scheduleSave();
     }
 
-    surface.addEventListener('scroll', updatePageInfo, { passive: true });
+    // each pane wires its own scroll handler when it is built
     function updatePageInfo() {
       if (!State.doc) return;
       const mid = surface.scrollTop + surface.clientHeight / 3;
@@ -4139,8 +4300,8 @@
       } catch (err) {
         toast('Could not load the PDF and math libraries — check the network or run npm run vendor');
       }
-      initNoteFileEditor();
       surface.focus();
+      setMode('empty');
       let openedFromArg = false;
       if (hasShell && window.margin.argPath) {
         const p = await window.margin.argPath();
@@ -4160,19 +4321,26 @@
         // workspace of twenty lectures still starts instantly.
         if (!openedFromArg && Array.isArray(saved.tabs)) {
           for (const entry of saved.tabs) {
-            if (!entry || !entry.path || tabForPath(entry.path)) continue;
-            tabs.push({
+            if (!entry || !entry.path) continue;
+            const target = entry.pane === 1 ? (panes[1] || createPane()) : panes[0];
+            if (target.tabs.some(t => t.path === entry.path)) continue;
+            target.tabs.push({
               id: ++tabSeq, type: entry.type === 'note' ? 'note' : 'pdf',
               path: entry.path, name: entry.path.split('/').pop(),
               loaded: false, scrollTop: 0
             });
           }
-          if (tabs.length) {
-            document.body.classList.add('has-tabs');
-            paintTabs();
-            const wanted = (saved.active && tabForPath(saved.active)) || tabs[0];
-            await activateTab(wanted.id, { focus: false });
+          if (panes.length > 1) document.body.classList.add('split');
+          for (const pane of panes) {
+            if (!pane.tabs.length) continue;
+            pane.el.classList.add('has-tabs');
+            paintTabs(pane);
+            const wanted = pane.tabs.find(t => t.path === saved.active) || pane.tabs[0];
+            await activateTab(wanted.id, { focus: false, pane });
           }
+          // leave the pane that was active when we quit in charge
+          const home = panes.find(p => p.tabs.some(t => t.path === saved.active)) || panes[0];
+          focusPane(home);
         }
         if (!openedFromArg && !State.activeFile) setMode('empty');
       }
@@ -4180,7 +4348,7 @@
       // Cmd+W: close the open tab, and only close the window once none are left
       if (hasShell && window.margin.onCloseRequest) {
         window.margin.onCloseRequest(async () => {
-          if (activeTabId != null) await closeTab(activeTabId);
+          if (focusedPane.activeTabId != null) await closeTab(focusedPane.activeTabId);
           else { await flushSaves(); window.margin.closeWindow(); }
         });
       }
