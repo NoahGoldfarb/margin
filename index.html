@@ -952,6 +952,30 @@
       display: none
     }
 
+    /* the smaller sibling of #drop — one pane empty, not the whole window */
+    .pane-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      text-align: center;
+      min-height: calc(100vh - 34px - 32px - 18px);
+      color: var(--chrome-dim);
+      font-size: 12.5px;
+    }
+
+    .pane-empty.hidden {
+      display: none
+    }
+
+    .pane-empty strong {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 18px;
+      color: var(--chrome-text);
+    }
+
     .notefile-page {
       background: var(--note);
       color: var(--note-text);
@@ -2889,9 +2913,13 @@
       rendered.className = 'note-render notefile-render';
       notePage.append(src, rendered);
       note.appendChild(notePage);
-      paneSurface.append(pages, note);
+      // shown when this specific pane has nothing open — distinct from the
+      // global #drop screen, which only applies when NO pane has anything
+      const empty = document.createElement('div'); empty.className = 'pane-empty hidden';
+      empty.innerHTML = '<strong>No file open</strong><span>Click a file in the sidebar</span>';
+      paneSurface.append(pages, note, empty);
       el.append(tabbar, paneSurface);
-      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered });
+      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty });
 
       // the pane you touch is the pane you are working in
       paneSurface.addEventListener('mousedown', () => focusPane(pane));
@@ -2947,19 +2975,45 @@
       setMode('empty');
     }
 
-    // Cmd+\ — put what you are looking at side by side with itself
+    // Cmd+\ — pop the current tab out into a new pane. It moves, it does not
+    // mirror: the file ends up open in exactly one place, same as every other
+    // "open this file" path in the app (see findOpenTab).
     async function splitPane() {
       if (panes.length > 1) { toast('Already split'); return; }
       const current = activeTab();
-      await checkpointActive();
+      const sourcePane = focusedPane;
+      await checkpointActive(); // save scroll/scale/etc. into `current` before moving it
       const pane = createPane();
       document.body.classList.add('split');
-      // handover:false — this function decides what the new pane shows, and a
-      // concurrent handover would race it (and could clear what we just opened)
-      focusPane(pane, { handover: false });
-      if (current && current.path) {
-        await openInTab(current.type, current.path, current.name, pane, { allowDuplicate: true });
+
+      if (current) {
+        const idx = sourcePane.tabs.indexOf(current);
+        sourcePane.tabs.splice(idx, 1);
+        if (current.container) pane.pages.appendChild(current.container); // re-parent rendered pages, don't re-render
+        pane.tabs.push(current);
+        pane.el.classList.add('has-tabs');
+
+        // give the old pane a sane neighbour to fall back to
+        const fallback = sourcePane.tabs[idx] || sourcePane.tabs[idx - 1] || null;
+        sourcePane.activeTabId = fallback ? fallback.id : null;
+        if (!sourcePane.tabs.length) sourcePane.el.classList.remove('has-tabs');
+        paintTabs(sourcePane); // not focused, so nothing else will repaint it
+
+        // handover:false — this function decides what the new pane shows, and
+        // a concurrent handover would race it and could clear what we just moved
+        focusPane(pane, { handover: false });
+        await activateTab(current.id, { pane });
+
+        // Unlike closing a pane's last tab, the old half does NOT auto-collapse
+        // here: the whole point of splitting is to get a second working area,
+        // and if there was only one file open, collapsing it back would make
+        // Cmd+\ look like it did nothing. It stays open — empty if that was
+        // its only tab, or showing its fallback tab's actual content if not
+        // (its container was just hidden, never repainted, since sourcePane
+        // isn't the one State/restoreTab are tracking any more).
+        syncPaneDisplay(sourcePane);
       } else {
+        focusPane(pane, { handover: false });
         clearLiveDocument();
         paintTabs(pane);
       }
@@ -3100,18 +3154,9 @@
       return true;
     }
 
-    // Opening a file that is already open just goes to it, like every editor.
-    // allowDuplicate exists for exactly one caller — splitPane, seeding a
-    // brand-new (necessarily empty) pane with whatever the other pane is
-    // showing — never for a normal "open this file" action.
-    async function openInTab(type, path, name, pane = focusedPane, { allowDuplicate = false } = {}) {
-      let found = null;
-      if (allowDuplicate) {
-        const t = pane.tabs.find(t => t.path === path);
-        if (t) found = { tab: t, pane };
-      } else {
-        found = findOpenTab(path);
-      }
+    // opening a file that is already open just goes to it, wherever it is
+    async function openInTab(type, path, name, pane = focusedPane) {
+      const found = findOpenTab(path);
       if (found) return activateTab(found.tab.id, { pane: found.pane });
       const tab = {
         id: ++tabSeq, type, path,
@@ -3192,6 +3237,12 @@
       $('#drop').classList.toggle('hidden', anyTabs());
       pane.pages.classList.toggle('hidden', mode !== 'pdf');
       pane.note.classList.toggle('hidden', mode !== 'note');
+      pane.empty.classList.toggle('hidden', mode !== 'empty');
+      // io and the lecture player both belong to whichever pane is actually
+      // focused — setting an unfocused pane's mode (e.g. it just lost its
+      // last tab in a split move) must not tear down what the user is
+      // looking at in the other pane
+      if (pane !== focusedPane) return;
       if (mode !== 'pdf' && io) { io.disconnect(); io = null; }
       // the recording belongs to a PDF, so its player goes away with the PDF
       if (mode !== 'pdf') {
@@ -3199,6 +3250,26 @@
         if (audio) audio.pause();
         $('#audiobar').classList.add('hidden');
       }
+    }
+
+    // Refreshes what an UNFOCUSED pane actually shows on screen, without
+    // touching State — State belongs to focusedPane alone. Needed after a
+    // split-move leaves a pane's active tab pointed at something whose
+    // container is hidden or was never the one on top.
+    function syncPaneDisplay(pane) {
+      const tab = pane.tabs.find(t => t.id === pane.activeTabId);
+      if (!tab || !tab.loaded) { setMode('empty', pane); return; }
+      if (tab.type === 'pdf') {
+        setMode('pdf', pane);
+        for (const child of pane.pages.children) child.hidden = child.dataset.tab !== String(tab.id);
+      } else {
+        setMode('note', pane);
+        pane.src.value = tab.text || '';
+        renderMarkdown(pane.src.value, pane.rendered);
+        pane.src.hidden = true;
+        pane.rendered.hidden = false;
+      }
+      pane.surface.scrollTop = tab.scrollTop || 0;
     }
 
     /* ------------------------------------------------------------------ *

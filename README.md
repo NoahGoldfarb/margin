@@ -129,18 +129,18 @@ scroll sideways, and a half-width split pane fits its own width, not the
 full window's. Zoom manually (`Ctrl+=`/`Ctrl+-`) and that choice is
 remembered for that document from then on; `Ctrl+0` goes back to fit-width.
 
-`Cmd+\` splits the view in two, each half with its own tabs — the textbook
-beside the lecture slides, or the slides beside your notes. Whichever half you
-last clicked or scrolled is the live one: it takes your typing, Ctrl-clicks and
-highlights, and it is marked with an accent line under its tab bar while the
-other half dims. `Cmd+Alt+←/→` moves between them, and closing the last tab in
-a half collapses it back to a single view.
+`Cmd+\` pops the current tab out into a new pane beside it — the textbook next
+to the lecture slides, or the slides next to your notes. The tab *moves*: it
+leaves the pane it was in, so it is never open in both halves at once, the
+same rule that governs opening a file anywhere else in the app. Any other
+tabs stay right where they were, and the old half stays open too — ready for
+you to put something else there, or showing whichever of its other tabs was
+next in line if it had more than one open.
 
-Splitting starts by mirroring whatever you were looking at into the new
-half — that is the one deliberate exception to "never open twice", so you can
-view two different spots in the same document side by side. From then on,
-opening a file anywhere (the sidebar, search, `Ctrl+O`, a Finder drop) always
-goes to whichever pane already has it rather than adding a second copy.
+Whichever half you last clicked or scrolled is the live one: it takes your
+typing, Ctrl-clicks and highlights, and is marked with an accent line under
+its tab bar while the other half dims. `Cmd+Alt+←/→` moves between them, and
+closing the last tab in a half collapses it back to a single view.
 
 Margin follows VS Code for the window itself. `Cmd+W` closes the current tab,
 and once no tabs are left it closes the window; `Cmd+Shift+W` closes the window
