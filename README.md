@@ -115,9 +115,9 @@ already on disk is deleted, and switching it back on brings it all back.
 ## Tabs, windows and the open folder
 
 Files open as tabs, the way they do in a browser, Obsidian or VS Code. Opening
-a file that is already open goes to its tab rather than opening it twice.
-Switch with a click, `Ctrl+Tab`, or `Cmd+1…9`; close with the `×`, a middle
-click, or `Cmd+W`.
+a file that is already open — in any pane — goes to its tab rather than
+opening it twice. Switch with a click, `Ctrl+Tab`, or `Cmd+1…9`; close with
+the `×`, a middle click, or `Cmd+W`.
 
 Each tab keeps its own document: a PDF holds its own notes, highlights, zoom
 level, rendered pages and scroll position, so coming back to a lecture is
@@ -135,6 +135,12 @@ last clicked or scrolled is the live one: it takes your typing, Ctrl-clicks and
 highlights, and it is marked with an accent line under its tab bar while the
 other half dims. `Cmd+Alt+←/→` moves between them, and closing the last tab in
 a half collapses it back to a single view.
+
+Splitting starts by mirroring whatever you were looking at into the new
+half — that is the one deliberate exception to "never open twice", so you can
+view two different spots in the same document side by side. From then on,
+opening a file anywhere (the sidebar, search, `Ctrl+O`, a Finder drop) always
+goes to whichever pane already has it rather than adding a second copy.
 
 Margin follows VS Code for the window itself. `Cmd+W` closes the current tab,
 and once no tabs are left it closes the window; `Cmd+Shift+W` closes the window

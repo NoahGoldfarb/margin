@@ -2790,8 +2790,8 @@
     // the bytes are already in hand, so the tab starts out loaded
     async function openBytes(bytes, name, path) {
       if (path) {
-        const existing = tabForPath(path);
-        if (existing) return activateTab(existing.id);
+        const found = findOpenTab(path);
+        if (found) return activateTab(found.tab.id, { pane: found.pane });
       }
       await checkpointActive();
       const tab = {
@@ -2859,8 +2859,18 @@
     let tabs = [];   // alias for focusedPane.tabs (same array, so mutation works)
 
     const activeTab = () => focusedPane && focusedPane.tabs.find(t => t.id === focusedPane.activeTabId) || null;
-    const tabForPath = p => tabs.find(t => t.path && t.path === p) || null;
     const anyTabs = () => panes.some(p => p.tabs.length);
+
+    // which pane (if any) already has this path open — checked across every
+    // pane, not just the focused one, so the same file can never end up open
+    // in two panes at once via a normal "open this file" action
+    function findOpenTab(path) {
+      for (const p of panes) {
+        const t = p.tabs.find(t => t.path === path);
+        if (t) return { tab: t, pane: p };
+      }
+      return null;
+    }
 
     function createPane() {
       const pane = { id: ++paneSeq, tabs: [], activeTabId: null };
@@ -2948,7 +2958,7 @@
       // concurrent handover would race it (and could clear what we just opened)
       focusPane(pane, { handover: false });
       if (current && current.path) {
-        await openInTab(current.type, current.path, current.name, pane);
+        await openInTab(current.type, current.path, current.name, pane, { allowDuplicate: true });
       } else {
         clearLiveDocument();
         paintTabs(pane);
@@ -3090,10 +3100,19 @@
       return true;
     }
 
-    // opening a file that is already open just goes to it, like every editor
-    async function openInTab(type, path, name, pane = focusedPane) {
-      const existing = pane.tabs.find(t => t.path === path);
-      if (existing) return activateTab(existing.id, { pane });
+    // Opening a file that is already open just goes to it, like every editor.
+    // allowDuplicate exists for exactly one caller — splitPane, seeding a
+    // brand-new (necessarily empty) pane with whatever the other pane is
+    // showing — never for a normal "open this file" action.
+    async function openInTab(type, path, name, pane = focusedPane, { allowDuplicate = false } = {}) {
+      let found = null;
+      if (allowDuplicate) {
+        const t = pane.tabs.find(t => t.path === path);
+        if (t) found = { tab: t, pane };
+      } else {
+        found = findOpenTab(path);
+      }
+      if (found) return activateTab(found.tab.id, { pane: found.pane });
       const tab = {
         id: ++tabSeq, type, path,
         name: name || path.split('/').pop(),
@@ -3435,11 +3454,15 @@
 
     function retargetPaths(from, to, isDir) {
       const remap = p => p === from ? to : to + p.slice(from.length);
-      for (const tab of tabs) {
-        if (!tab.path || !isUnder(tab.path, from, isDir)) continue;
-        tab.path = remap(tab.path);
-        tab.name = tab.path.split('/').pop();
-        if (tab.key) tab.key = tab.path;
+      // every pane, not just the focused one — a split view can have the
+      // renamed/moved file open on both sides at once
+      for (const pane of panes) {
+        for (const tab of pane.tabs) {
+          if (!tab.path || !isUnder(tab.path, from, isDir)) continue;
+          tab.path = remap(tab.path);
+          tab.name = tab.path.split('/').pop();
+          if (tab.key) tab.key = tab.path;
+        }
       }
       if (State.path && isUnder(State.path, from, isDir)) {
         State.path = remap(State.path);
@@ -3460,12 +3483,17 @@
         if (!isUnder(key, from, isDir)) continue;
         expandedDirs.delete(key); expandedDirs.add(remap(key));
       }
-      paintTabs(); rememberTabs();
+      for (const pane of panes) paintTabs(pane);
+      rememberTabs();
     }
 
     async function closeTabsUnder(root, isDir) {
-      for (const tab of tabs.filter(t => t.path && isUnder(t.path, root, isDir))) {
-        await closeTab(tab.id, { silent: true });
+      // same reasoning as retargetPaths — a deleted file might be open on
+      // both sides of a split, and both tabs need to go, not just one
+      for (const pane of panes) {
+        for (const tab of pane.tabs.filter(t => t.path && isUnder(t.path, root, isDir))) {
+          await closeTab(tab.id, { silent: true, pane });
+        }
       }
       for (const key of [...treeCache.keys()]) if (isUnder(key, root, isDir)) treeCache.delete(key);
       for (const key of [...expandedDirs]) if (isUnder(key, root, isDir)) expandedDirs.delete(key);
