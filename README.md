@@ -59,7 +59,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Ctrl+Shift+O` | Open a folder in the sidebar |
 | `Ctrl+F` | Search filenames, PDF text and notes across the folder |
 | `Ctrl+,` | Settings — theme, accent colour, note text size |
-| `Ctrl+=` `Ctrl+-` `Ctrl+0` | Zoom |
+| `Ctrl+=` `Ctrl+-` `Ctrl+0` | Zoom in, out, reset to fit the page to the window |
 | `Ctrl+E` | Export all notes as one Markdown file |
 | `?` | Key list |
 
@@ -122,6 +122,12 @@ click, or `Cmd+W`.
 Each tab keeps its own document: a PDF holds its own notes, highlights, zoom
 level, rendered pages and scroll position, so coming back to a lecture is
 instant and lands exactly where you left it.
+
+A PDF you have never opened before starts fit to the width of whatever pane
+it opens in — a wide slide deck or a poster-sized page never forces you to
+scroll sideways, and a half-width split pane fits its own width, not the
+full window's. Zoom manually (`Ctrl+=`/`Ctrl+-`) and that choice is
+remembered for that document from then on; `Ctrl+0` goes back to fit-width.
 
 `Cmd+\` splits the view in two, each half with its own tabs — the textbook
 beside the lecture slides, or the slides beside your notes. Whichever half you

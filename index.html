@@ -1769,7 +1769,7 @@
         <dt>Ctrl+F</dt>
         <dd>Search filenames, PDF text, and notes across the open folder</dd>
         <dt>Ctrl+= / Ctrl+- / Ctrl+0</dt>
-        <dd>Zoom in, out, reset</dd>
+        <dd>Zoom in, out, reset to fit the page to the window</dd>
         <dt>Ctrl+E</dt>
         <dd>Export notes as a Markdown file</dd>
         <dt>?</dt>
@@ -2796,7 +2796,7 @@
       await checkpointActive();
       const tab = {
         id: ++tabSeq, type: 'pdf', path: path || null,
-        name: name || 'document.pdf', loaded: true, scrollTop: 0, scale: 1.25
+        name: name || 'document.pdf', loaded: true, scrollTop: 0, scale: null
       };
       tab.container = document.createElement('div');
       tab.container.className = 'doc';
@@ -2809,7 +2809,7 @@
       State.name = tab.name; State.path = tab.path;
       State.key = path || fingerprint(bytes);
       State.activeFile = path ? { type: 'pdf', path } : null;
-      State.scale = 1.25;
+      State.scale = null; // fit to width unless loadNotes finds a saved preference below
       State.doc = await pdfjsLib.getDocument({ data: bytes }).promise;
       State.notes = await loadNotes();
       $('#docname').textContent = State.name;
@@ -3024,7 +3024,7 @@
         pagesEl.appendChild(tab.container);
         // buildPages and loadNotes read from State, so make this tab live first
         State.name = tab.name; State.path = tab.path; State.key = tab.path;
-        State.scale = tab.scale || 1.25;
+        State.scale = tab.scale || null; // fit to width unless loadNotes finds a saved preference
         State.doc = await pdfjsLib.getDocument({ data: f.bytes }).promise;
         State.notes = await loadNotes();
         tab.loaded = true;
@@ -3614,11 +3614,28 @@
     let io = null;
     let flashRect = null;   // {page,x0,y0,x1,y1} — transient "found it" flash after a search jump
     let flashTimer = null;
+    // A page wider than the pane forces horizontal scrolling, which this app
+    // is not built for (everything assumes you only ever scroll down). A
+    // null scale means "no saved preference yet" — fit the page to whatever
+    // width is actually available instead of a fixed guess.
+    function fitScaleFor(naturalWidth) {
+      const available = Math.max(200, surface.clientWidth - 48);
+      // No legibility floor here: fitting to width is the thing guaranteeing
+      // no horizontal scroll, so it must never be overridden into overflowing
+      // again — an extreme page (a poster PDF in a narrow split pane) is
+      // still better tiny-but-whole than requiring a sideways scroll. 0.05 is
+      // just a numerical safety net, not a "don't get too small" opinion.
+      // The upper cap is a real opinion though: a small page should not blow
+      // up to fill a huge window.
+      return Math.min(2.5, Math.max(0.05, available / naturalWidth));
+    }
+
     async function buildPages(container) {
       const host = container || (activeTab() && activeTab().container) || pagesEl;
       host.innerHTML = ''; State.pages = [];
       if (io) io.disconnect();
       const first = await State.doc.getPage(1);
+      if (!State.scale) State.scale = fitScaleFor(first.getViewport({ scale: 1 }).width);
       const fv = first.getViewport({ scale: State.scale });
       for (let n = 1; n <= State.doc.numPages; n++) {
         const el = document.createElement('div');
@@ -4344,7 +4361,9 @@
 
     function zoom(f) {
       if (!State.doc) return;
-      State.scale = f ? Math.min(3, Math.max(.5, State.scale * f)) : 1.25;
+      // Ctrl+0 means "back to a sane default", i.e. fit-to-width again — not
+      // a fixed 125%, which is exactly the setting that overflows a big page
+      State.scale = f ? Math.min(3, Math.max(.5, State.scale * f)) : null;
       State.pages.forEach(p => { p.rendered = false; p.bitmap = null; });
       buildPages(); scheduleSave();
     }
