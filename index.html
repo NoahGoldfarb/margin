@@ -2657,6 +2657,18 @@
     const expandedDirs = new Set();
     let noteSaveTimer = null;
 
+    // In the desktop app the main process owns this, because only it can tell
+    // "quit" (keep the workspace) from "close the window" (end it).
+    async function rememberFolder(dir) {
+      if (hasShell) await window.margin.setLastFolder(dir);
+      else if (dir) localStorage.setItem('margin:last-folder', dir);
+      else localStorage.removeItem('margin:last-folder');
+    }
+    async function rememberedFolder() {
+      if (hasShell) return await window.margin.lastFolder();
+      return localStorage.getItem('margin:last-folder');
+    }
+
     async function openFolder(pathArg) {
       const dir = pathArg || (hasShell ? await window.margin.openFolder() : null);
       if (!dir) return;
@@ -2664,9 +2676,7 @@
       // longer plugged in — don't reopen a sidebar onto nothing
       const entries = await window.margin.readDir(dir);
       if (entries === null) {
-        if (localStorage.getItem('margin:last-folder') === dir) {
-          localStorage.removeItem('margin:last-folder');
-        }
+        if (await rememberedFolder() === dir) await rememberFolder(null);
         toast(`Folder no longer available: ${dir.split('/').filter(Boolean).pop() || dir}`);
         return;
       }
@@ -2675,7 +2685,7 @@
       treeCache.set(dir, entries);
       document.body.classList.add('has-folder');
       $('#sidebar-name').textContent = dir.split('/').filter(Boolean).pop() || dir;
-      localStorage.setItem('margin:last-folder', dir);
+      await rememberFolder(dir);
       renderTree();
       if (!State.activeFile) { setMode('empty'); }
     }
@@ -3710,7 +3720,8 @@
         }
       }
       if (hasShell) {
-        const last = localStorage.getItem('margin:last-folder');
+        localStorage.removeItem('margin:last-folder'); // the shell owns this now
+        const last = await rememberedFolder();
         if (last) await openFolder(last);
         if (!openedFromArg && !State.activeFile) setMode('empty');
       }

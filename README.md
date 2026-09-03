@@ -107,6 +107,17 @@ If you don't want any of this, turn **Lecture recording** off in `Ctrl+,` —
 the Record button, the player and the note timestamps all disappear. Nothing
 already on disk is deleted, and switching it back on brings it all back.
 
+## Windows and the open folder
+
+Margin follows VS Code here. `Cmd+Q` quits with the workspace intact — the next
+launch comes back to the same folder. `Cmd+W` closes the window and ends the
+workspace: on macOS the app stays running with no window, and the next window
+you open (from the Dock) starts empty.
+
+The open folder is therefore remembered by the app itself, in
+`window-state.json` under the user data directory, since only the main process
+can tell a quit apart from a window close.
+
 ## Themes
 
 `Ctrl+,` opens Settings: eleven themes, an accent colour, and note text size.

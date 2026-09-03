@@ -8,23 +8,79 @@ const sidecar = p => p.replace(/\.pdf$/i, '') + '.margin.json';
 // A path passed on the command line ("open with Margin")
 const cliPath = process.argv.slice(1).find(a => /\.pdf$/i.test(a)) || null;
 
+/* ------------------------------------------------------------------------ *
+ *  Which folder to come back to, VS Code style: quitting keeps the
+ *  workspace, closing the window ends it. Only the main process can tell
+ *  those apart, so it owns the state rather than the page.
+ * ------------------------------------------------------------------------ */
+let lastFolder = null;
+let isQuitting = false;
+const statePath = () => path.join(app.getPath('userData'), 'window-state.json');
+
+async function loadWindowState() {
+  try { lastFolder = JSON.parse(await fs.readFile(statePath(), 'utf8')).folder || null; }
+  catch { lastFolder = null; }
+}
+// written synchronously: this is called from window 'close', where the app may
+// be on its way out and an awaited write could lose the race
+function saveWindowState() {
+  try { require('fs').writeFileSync(statePath(), JSON.stringify({ folder: lastFolder })); }
+  catch { /* a lost workspace memory is not worth bothering anyone about */ }
+}
+
+function buildMenu() {
+  // Without a menu macOS has nothing to drive Cmd+Q or Cmd+W at all. Only the
+  // standard roles, so none of the app's own keys are shadowed.
+  const mac = process.platform === 'darwin';
+  const template = [
+    ...(mac ? [{ role: 'appMenu' }] : [{
+      label: 'File',
+      submenu: [{ role: 'close' }, { role: 'quit' }]
+    }]),
+    { role: 'editMenu' },
+    {
+      // built by hand because the windowMenu role has no Close item, and
+      // Cmd+W is the whole point of it here
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { role: 'close' },
+        ...(mac ? [{ type: 'separator' }, { role: 'front' }] : [])
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 940,
     backgroundColor: '#151A22',
     title: 'Margin',
+    autoHideMenuBar: true, // keeps the chrome-free look off macOS
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
-  Menu.setApplicationMenu(null); // the app is keyboard-driven; no menu chrome
+  win.on('close', () => {
+    if (isQuitting) return;
+    // where closing the last window quits the app, that close *is* the quit
+    if (process.platform !== 'darwin' && BrowserWindow.getAllWindows().length <= 1) return;
+    lastFolder = null;
+    saveWindowState();
+  });
   win.loadFile(path.join(__dirname, 'index.html'));
 }
 
-app.whenReady().then(() => {
+app.on('before-quit', () => { isQuitting = true; });
+
+app.whenReady().then(async () => {
+  await loadWindowState();
+  buildMenu();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -34,6 +90,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+ipcMain.handle('last-folder', () => lastFolder);
+ipcMain.handle('set-last-folder', (_e, p) => { lastFolder = p || null; saveWindowState(); return true; });
 
 async function readPdf(p) {
   const buf = await fs.readFile(p);

@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('margin', {
   // search
   walkDir:      root          => ipcRenderer.invoke('walk-dir', root),
 
+  // which folder to reopen next launch (owned by the main process)
+  lastFolder:    ()  => ipcRenderer.invoke('last-folder'),
+  setLastFolder: p   => ipcRenderer.invoke('set-last-folder', p),
+
   // lecture audio
   audioPath:    p                  => ipcRenderer.invoke('audio-path', p),
   saveAudio:    (p, bytes, ext)    => ipcRenderer.invoke('save-audio', p, bytes, ext),
