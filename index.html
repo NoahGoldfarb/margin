@@ -154,6 +154,113 @@
       outline-offset: 2px
     }
 
+    /* ---------- tab bar ---------- */
+    #tabbar {
+      position: absolute;
+      top: 34px;
+      left: 0;
+      right: 0;
+      height: 32px;
+      display: none;
+      align-items: stretch;
+      background: var(--ink);
+      border-bottom: 1px solid var(--rule);
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      z-index: 6;
+    }
+
+    #tabbar::-webkit-scrollbar {
+      display: none
+    }
+
+    body.has-tabs #tabbar {
+      display: flex
+    }
+
+    body.has-folder #tabbar {
+      left: 240px
+    }
+
+    body.has-tabs #surface,
+    body.has-tabs #drop {
+      top: 66px
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 8px 0 11px;
+      max-width: 210px;
+      flex: 0 0 auto;
+      cursor: pointer;
+      border-right: 1px solid var(--rule);
+      border-top: 2px solid transparent;
+      color: var(--chrome-dim);
+      font-size: 12.5px;
+      user-select: none;
+      transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    }
+
+    .tab:hover {
+      background: var(--ink-2)
+    }
+
+    .tab.active {
+      background: var(--ink-2);
+      border-top-color: var(--pen);
+      color: var(--chrome-strong);
+    }
+
+    .tab .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex: 0 0 6px;
+      background: var(--chrome-dim);
+    }
+
+    .tab.file-pdf .dot {
+      background: var(--pen)
+    }
+
+    .tab.file-md .dot {
+      background: #8FBF6F
+    }
+
+    .tab .label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tab .close {
+      border: 0;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      line-height: 1;
+      padding: 1px 3px 3px;
+      border-radius: 4px;
+      opacity: 0;
+      flex: 0 0 auto;
+      transition: opacity var(--fast) var(--ease), background var(--fast) var(--ease);
+    }
+
+    .tab:hover .close,
+    .tab.active .close {
+      opacity: .65
+    }
+
+    .tab .close:hover {
+      opacity: 1;
+      background: var(--rule);
+    }
+
     /* ---------- sidebar / file tree ---------- */
     #sidebar {
       position: absolute;
@@ -1541,6 +1648,8 @@
     <button class="chip" id="helpbtn">Keys <kbd>?</kbd></button>
   </div>
 
+  <div id="tabbar"></div>
+
   <div id="sidebar">
     <div id="sidebar-head">
       <span class="name" id="sidebar-name">Folder</span>
@@ -1590,6 +1699,12 @@
         <dd>Delete the note you are in</dd>
         <dt>Cmd+⌫ / Ctrl+⌫</dt>
         <dd>Delete the open file (a PDF takes its notes and recording with it)</dd>
+        <dt>Cmd+W / Ctrl+W</dt>
+        <dd>Close the tab — and the window once no tabs are left</dd>
+        <dt>Ctrl+Tab</dt>
+        <dd>Next tab (add Shift for the previous one)</dd>
+        <dt>Cmd+1…9</dt>
+        <dd>Jump to a tab by position; 9 is the last one</dd>
         <dt>Ctrl+O</dt>
         <dd>Open a PDF</dd>
         <dt>Ctrl+Shift+O</dt>
@@ -2290,6 +2405,9 @@
     }
 
     function stampNow(target) {
+      // with tabs you can be reading another PDF while one is being recorded;
+      // only the lecture actually being recorded gets timestamps
+      if (recordingPath && State.path !== recordingPath) return;
       const t = recordingElapsed();
       if (t != null) target.t = +t.toFixed(2);
     }
@@ -2563,7 +2681,12 @@
      * ------------------------------------------------------------------ */
     const hasShell = !!window.margin;
     let saveTimer = null;
-    function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
+    // the handle is cleared when it fires, so "is a write still pending?" is
+    // answerable — switching tabs flushes only documents that actually changed
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => { saveTimer = null; saveNow(); }, 400);
+    }
     async function saveNow() {
       if (!State.key) return;
       const payload = {
@@ -2605,20 +2728,44 @@
     /* ------------------------------------------------------------------ *
      *  opening a document
      * ------------------------------------------------------------------ */
+    // dropped, picked from the dialog, or handed over on the command line —
+    // the bytes are already in hand, so the tab starts out loaded
     async function openBytes(bytes, name, path) {
-      setMode('pdf');
-      stopRecording(); // a recording belongs to the lecture it was started in
-      State.name = name || 'document.pdf'; State.path = path || null;
+      if (path) {
+        const existing = tabForPath(path);
+        if (existing) return activateTab(existing.id);
+      }
+      await checkpointActive();
+      const tab = {
+        id: ++tabSeq, type: 'pdf', path: path || null,
+        name: name || 'document.pdf', loaded: true, scrollTop: 0, scale: 1.25
+      };
+      tab.container = document.createElement('div');
+      tab.container.className = 'doc';
+      tab.container.dataset.tab = String(tab.id);
+      pagesEl.appendChild(tab.container);
+      tabs.push(tab);
+      activeTabId = tab.id;
+      document.body.classList.add('has-tabs');
+
+      State.name = tab.name; State.path = tab.path;
       State.key = path || fingerprint(bytes);
       State.activeFile = path ? { type: 'pdf', path } : null;
+      State.scale = 1.25;
       State.doc = await pdfjsLib.getDocument({ data: bytes }).promise;
       State.notes = await loadNotes();
       $('#docname').textContent = State.name;
-      await buildPages();
+      showDocContainer(tab);
+      setMode('pdf');
+      await buildPages(tab.container);
+      Object.assign(tab, {
+        doc: State.doc, key: State.key, notes: State.notes, highlights: State.highlights,
+        pages: State.pages, scale: State.scale, audioDuration: State.audioDuration
+      });
       surface.focus();
       const n = State.notes.length;
       toast(n ? `${n} note${n > 1 ? 's' : ''} restored` : `${State.doc.numPages} pages ready`);
-      renderTree();
+      paintTabs(); renderTree(); rememberTabs();
       loadLectureAudio();
     }
     async function pickFile() {
@@ -2633,6 +2780,205 @@
       openBytes(buf, f.name, null);
       e.target.value = '';
     });
+
+    /* ------------------------------------------------------------------ *
+     *  tabs
+     *
+     *  State still describes exactly one open document, the way it always
+     *  has. A tab owns a snapshot of those fields; switching checkpoints the
+     *  live ones into the outgoing tab and restores the incoming tab's.
+     *  A PDF keeps its rendered pages in its own container so coming back to
+     *  it is instant; note tabs share the one editor and just swap text.
+     * ------------------------------------------------------------------ */
+    let tabs = [];
+    let activeTabId = null;
+    let tabSeq = 0;
+
+    const activeTab = () => tabs.find(t => t.id === activeTabId) || null;
+    const tabForPath = p => tabs.find(t => t.path && t.path === p) || null;
+
+    function showDocContainer(tab) {
+      for (const child of pagesEl.children) {
+        child.hidden = !tab || child.dataset.tab !== String(tab.id);
+      }
+    }
+
+    // A pending debounced write belongs to the document that is still live, so
+    // it has to land before another one becomes current. Only actually-pending
+    // writes are flushed: merely visiting a PDF must not create a notes file.
+    async function flushSaves() {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; await saveNow(); }
+      if (noteSaveTimer) { clearTimeout(noteSaveTimer); noteSaveTimer = null; await saveNoteFile(); }
+    }
+
+    async function checkpointActive() {
+      const tab = activeTab();
+      if (!tab || !tab.loaded) return;
+      await flushSaves();
+      tab.scrollTop = surface.scrollTop;
+      if (tab.type === 'pdf') {
+        Object.assign(tab, {
+          doc: State.doc, path: State.path, key: State.key, name: State.name,
+          notes: State.notes, highlights: State.highlights, pages: State.pages,
+          scale: State.scale, audioDuration: State.audioDuration
+        });
+      } else {
+        tab.text = $('#notefile-src').value;
+      }
+    }
+
+    function attachObserver() {
+      if (io) io.disconnect();
+      io = new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (e.isIntersecting) renderPage(State.pages[+e.target.dataset.page - 1]);
+        }
+      }, { root: surface, rootMargin: '900px 0px' });
+      State.pages.forEach(p => io.observe(p.el));
+    }
+
+    async function loadTab(tab) {
+      if (tab.loaded) return true;
+      if (tab.type === 'pdf') {
+        const f = await window.margin.readPdf(tab.path);
+        if (!f) { toast('Could not read ' + tab.name); return false; }
+        tab.container = document.createElement('div');
+        tab.container.className = 'doc';
+        tab.container.dataset.tab = String(tab.id);
+        pagesEl.appendChild(tab.container);
+        // buildPages and loadNotes read from State, so make this tab live first
+        State.name = tab.name; State.path = tab.path; State.key = tab.path;
+        State.scale = tab.scale || 1.25;
+        State.doc = await pdfjsLib.getDocument({ data: f.bytes }).promise;
+        State.notes = await loadNotes();
+        tab.loaded = true;
+        await buildPages(tab.container);
+        Object.assign(tab, {
+          doc: State.doc, key: State.key, notes: State.notes,
+          highlights: State.highlights, pages: State.pages,
+          scale: State.scale, audioDuration: State.audioDuration
+        });
+      } else {
+        const text = await window.margin.readText(tab.path);
+        if (text == null) { toast('Could not read ' + tab.name); return false; }
+        tab.text = text;
+        tab.loaded = true;
+      }
+      return true;
+    }
+
+    function restoreTab(tab) {
+      State.activeFile = tab.path ? { type: tab.type, path: tab.path } : null;
+      $('#docname').textContent = tab.name;
+      if (tab.type === 'pdf') {
+        Object.assign(State, {
+          doc: tab.doc, path: tab.path, key: tab.key, name: tab.name,
+          notes: tab.notes, highlights: tab.highlights, pages: tab.pages,
+          scale: tab.scale, audioDuration: tab.audioDuration
+        });
+        showDocContainer(tab);
+        setMode('pdf');
+        attachObserver();
+        updatePageInfo();
+        loadLectureAudio();
+      } else {
+        Object.assign(State, {
+          doc: null, path: null, key: null, name: tab.name,
+          notes: [], highlights: [], pages: [], audioDuration: 0
+        });
+        $('#pageinfo').textContent = '';
+        const source = $('#notefile-src'), rendered = $('#notefile-render');
+        source.value = tab.text || ''; source._snippetStops = null;
+        renderMarkdown(source.value, rendered);
+        source.hidden = true; rendered.hidden = false;
+        setMode('note');
+      }
+      surface.scrollTop = tab.scrollTop || 0;
+    }
+
+    async function activateTab(id, { focus = true } = {}) {
+      const tab = tabs.find(t => t.id === id);
+      if (!tab) return false;
+      if (activeTabId !== id) await checkpointActive();
+      activeTabId = id;
+      paintTabs();
+      if (!await loadTab(tab)) { closeTab(id, { silent: true }); return false; }
+      restoreTab(tab);
+      paintTabs(); renderTree(); rememberTabs();
+      if (focus) surface.focus();
+      return true;
+    }
+
+    // opening a file that is already open just goes to it, like every editor
+    async function openInTab(type, path, name) {
+      const existing = tabForPath(path);
+      if (existing) return activateTab(existing.id);
+      const tab = {
+        id: ++tabSeq, type, path,
+        name: name || path.split('/').pop(),
+        loaded: false, scrollTop: 0
+      };
+      tabs.push(tab);
+      document.body.classList.add('has-tabs');
+      return activateTab(tab.id);
+    }
+
+    async function closeTab(id, { silent = false } = {}) {
+      const index = tabs.findIndex(t => t.id === id);
+      if (index < 0) return;
+      const tab = tabs[index];
+      if (id === activeTabId && !silent) await flushSaves();
+      if (tab.container) tab.container.remove();
+      if (tab.type === 'pdf' && tab.pages) for (const p of tab.pages) p.bitmap = null;
+      tabs.splice(index, 1);
+      if (id === activeTabId) {
+        activeTabId = null;
+        const next = tabs[index] || tabs[index - 1];
+        if (next) { await activateTab(next.id); }
+        else {
+          if (io) { io.disconnect(); io = null; }
+          Object.assign(State, {
+            doc: null, path: null, key: null, name: '', activeFile: null,
+            notes: [], highlights: [], pages: [], audioDuration: 0
+          });
+          $('#docname').textContent = 'No file open';
+          $('#pageinfo').textContent = '';
+          showDocContainer(null);
+          setMode('empty');
+        }
+      }
+      if (!tabs.length) document.body.classList.remove('has-tabs');
+      paintTabs(); renderTree(); rememberTabs();
+    }
+
+    function paintTabs() {
+      const bar = $('#tabbar');
+      bar.innerHTML = '';
+      for (const tab of tabs) {
+        const el = document.createElement('div');
+        const kind = tab.type === 'pdf' ? 'file-pdf' : 'file-md';
+        el.className = 'tab ' + kind + (tab.id === activeTabId ? ' active' : '');
+        el.title = tab.path || tab.name;
+        const dot = document.createElement('span'); dot.className = 'dot';
+        const label = document.createElement('span'); label.className = 'label'; label.textContent = tab.name;
+        const close = document.createElement('button');
+        close.className = 'close'; close.textContent = '×'; close.title = 'Close';
+        close.onclick = e => { e.stopPropagation(); closeTab(tab.id); };
+        el.append(dot, label, close);
+        el.onclick = () => activateTab(tab.id);
+        el.onauxclick = e => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id); } };
+        bar.appendChild(el);
+      }
+      const current = bar.querySelector('.tab.active');
+      if (current) current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    function cycleTab(step) {
+      if (tabs.length < 2) return;
+      const at = tabs.findIndex(t => t.id === activeTabId);
+      const next = tabs[(at + step + tabs.length) % tabs.length];
+      if (next) activateTab(next.id);
+    }
 
     /* ------------------------------------------------------------------ *
      *  view modes — the surface shows exactly one of: drop / pdf / note
@@ -2660,13 +3006,20 @@
     // In the desktop app the main process owns this, because only it can tell
     // "quit" (keep the workspace) from "close the window" (end it).
     async function rememberFolder(dir) {
-      if (hasShell) await window.margin.setLastFolder(dir);
+      if (hasShell) await window.margin.setWorkspace({ folder: dir });
       else if (dir) localStorage.setItem('margin:last-folder', dir);
       else localStorage.removeItem('margin:last-folder');
     }
     async function rememberedFolder() {
-      if (hasShell) return await window.margin.lastFolder();
+      if (hasShell) return (await window.margin.getWorkspace()).folder || null;
       return localStorage.getItem('margin:last-folder');
+    }
+    // the open tabs are part of the workspace too, so a quit brings them back
+    function rememberTabs() {
+      if (!hasShell) return;
+      const open = tabs.filter(t => t.path).map(t => ({ type: t.type, path: t.path }));
+      const current = activeTab();
+      window.margin.setWorkspace({ tabs: open, active: current && current.path || null });
     }
 
     async function openFolder(pathArg) {
@@ -2750,31 +3103,20 @@
     }
 
     async function openPdfFromTree(path) {
-      const f = await window.margin.readPdf(path);
-      if (!f) { toast('Could not read ' + path.split('/').pop()); return; }
-      await openBytes(f.bytes, f.name, f.path);
+      await openInTab('pdf', path);
     }
 
     /* ------------------------------------------------------------------ *
      *  standalone note file — the Obsidian-style side of the app
      * ------------------------------------------------------------------ */
     async function openNoteFile(path) {
-      const text = await window.margin.readText(path);
-      if (text == null) { toast('Could not read ' + path.split('/').pop()); return; }
-      State.activeFile = { type: 'note', path };
-      State.doc = null; State.path = null;
-      $('#docname').textContent = path.split('/').pop();
-      $('#pageinfo').textContent = '';
-      setMode('note');
-      const source = $('#notefile-src'), rendered = $('#notefile-render');
-      source.value = text; source._snippetStops = null;
-      renderMarkdown(text, rendered);
-      source.hidden = true; rendered.hidden = false;
-      surface.scrollTop = 0;
-      renderTree();
+      await openInTab('note', path);
     }
 
-    function scheduleNoteSave() { clearTimeout(noteSaveTimer); noteSaveTimer = setTimeout(saveNoteFile, 400); }
+    function scheduleNoteSave() {
+      clearTimeout(noteSaveTimer);
+      noteSaveTimer = setTimeout(() => { noteSaveTimer = null; saveNoteFile(); }, 400);
+    }
     async function saveNoteFile() {
       if (!State.activeFile || State.activeFile.type !== 'note') return;
       try { await window.margin.writeText(State.activeFile.path, $('#notefile-src').value); }
@@ -2935,8 +3277,9 @@
     let io = null;
     let flashRect = null;   // {page,x0,y0,x1,y1} — transient "found it" flash after a search jump
     let flashTimer = null;
-    async function buildPages() {
-      pagesEl.innerHTML = ''; State.pages = [];
+    async function buildPages(container) {
+      const host = container || (activeTab() && activeTab().container) || pagesEl;
+      host.innerHTML = ''; State.pages = [];
       if (io) io.disconnect();
       const first = await State.doc.getPage(1);
       const fv = first.getViewport({ scale: State.scale });
@@ -2951,15 +3294,10 @@
         const label = document.createElement('div');
         label.className = 'pagenum'; label.textContent = n;
         el.appendChild(label);
-        pagesEl.appendChild(el);
+        host.appendChild(el);
         State.pages.push({ num: n, el, rendered: false, rendering: false, w: fv.width, h: fv.height });
       }
-      io = new IntersectionObserver(entries => {
-        for (const e of entries) {
-          if (e.isIntersecting) renderPage(State.pages[+e.target.dataset.page - 1]);
-        }
-      }, { root: surface, rootMargin: '900px 0px' });
-      State.pages.forEach(p => io.observe(p.el));
+      attachObserver();
       updatePageInfo();
     }
 
@@ -3129,6 +3467,11 @@
       el.className = 'note';
       el.dataset.id = note.id;
       el.style.width = '100%';
+      // Switching tabs blurs this editor, and that blur can land after another
+      // document is already live. Remember who this note belongs to so a late
+      // save can't write it into the newly-open document's sidecar.
+      const ownerKey = State.key;
+      const saveOwner = () => { if (State.key === ownerKey) scheduleSave(); };
 
       const head = document.createElement('div');
       head.className = 'note-head';
@@ -3161,7 +3504,7 @@
         source.hidden = true;
         rendered.hidden = false;
         el.classList.remove('is-editing');
-        scheduleSave();
+        saveOwner();
       };
       const edit = () => {
         source.hidden = false;
@@ -3172,7 +3515,7 @@
         autoGrow(source);
       };
       source.addEventListener('input', () => {
-        note.md = source.value; updateSnippetStops(source); autoGrow(source); scheduleSave();
+        note.md = source.value; updateSnippetStops(source); autoGrow(source); saveOwner();
       });
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
@@ -3589,6 +3932,13 @@
       const mod = e.ctrlKey || e.metaKey;
 
       if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch(); return; }
+      if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
+      if (mod && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const target = e.key === '9' ? tabs[tabs.length - 1] : tabs[+e.key - 1];
+        if (target) activateTab(target.id);
+        return;
+      }
       if (mod && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openFolder(); return; }
       if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickFile(); return; }
       if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); exportMarkdown(); return; }
@@ -3721,9 +4071,35 @@
       }
       if (hasShell) {
         localStorage.removeItem('margin:last-folder'); // the shell owns this now
-        const last = await rememberedFolder();
-        if (last) await openFolder(last);
+        const saved = await window.margin.getWorkspace();
+        if (saved.folder) await openFolder(saved.folder);
+        // Tabs come back as empty shells and load when you click them, so a
+        // workspace of twenty lectures still starts instantly.
+        if (!openedFromArg && Array.isArray(saved.tabs)) {
+          for (const entry of saved.tabs) {
+            if (!entry || !entry.path || tabForPath(entry.path)) continue;
+            tabs.push({
+              id: ++tabSeq, type: entry.type === 'note' ? 'note' : 'pdf',
+              path: entry.path, name: entry.path.split('/').pop(),
+              loaded: false, scrollTop: 0
+            });
+          }
+          if (tabs.length) {
+            document.body.classList.add('has-tabs');
+            paintTabs();
+            const wanted = (saved.active && tabForPath(saved.active)) || tabs[0];
+            await activateTab(wanted.id, { focus: false });
+          }
+        }
         if (!openedFromArg && !State.activeFile) setMode('empty');
+      }
+
+      // Cmd+W: close the open tab, and only close the window once none are left
+      if (hasShell && window.margin.onCloseRequest) {
+        window.margin.onCloseRequest(async () => {
+          if (activeTabId != null) await closeTab(activeTabId);
+          else { await flushSaves(); window.margin.closeWindow(); }
+        });
       }
     })();
   </script>

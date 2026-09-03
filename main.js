@@ -13,18 +13,24 @@ const cliPath = process.argv.slice(1).find(a => /\.pdf$/i.test(a)) || null;
  *  workspace, closing the window ends it. Only the main process can tell
  *  those apart, so it owns the state rather than the page.
  * ------------------------------------------------------------------------ */
-let lastFolder = null;
+let workspace = { folder: null, tabs: [], active: null };
 let isQuitting = false;
 const statePath = () => path.join(app.getPath('userData'), 'window-state.json');
 
 async function loadWindowState() {
-  try { lastFolder = JSON.parse(await fs.readFile(statePath(), 'utf8')).folder || null; }
-  catch { lastFolder = null; }
+  try {
+    const saved = JSON.parse(await fs.readFile(statePath(), 'utf8'));
+    workspace = {
+      folder: saved.folder || null,
+      tabs: Array.isArray(saved.tabs) ? saved.tabs : [],
+      active: saved.active || null
+    };
+  } catch { workspace = { folder: null, tabs: [], active: null }; }
 }
 // written synchronously: this is called from window 'close', where the app may
 // be on its way out and an awaited write could lose the race
 function saveWindowState() {
-  try { require('fs').writeFileSync(statePath(), JSON.stringify({ folder: lastFolder })); }
+  try { require('fs').writeFileSync(statePath(), JSON.stringify(workspace)); }
   catch { /* a lost workspace memory is not worth bothering anyone about */ }
 }
 
@@ -39,13 +45,22 @@ function buildMenu() {
     }]),
     { role: 'editMenu' },
     {
-      // built by hand because the windowMenu role has no Close item, and
-      // Cmd+W is the whole point of it here
+      // built by hand: the windowMenu role has no Close item, and Cmd+W has to
+      // close the open tab first, the way every editor and browser does
       label: 'Window',
       submenu: [
+        {
+          label: 'Close',
+          accelerator: 'CmdOrCtrl+W',
+          click: (item, win) => {
+            if (win) win.webContents.send('close-request');
+            else if (!mac) app.quit();
+          }
+        },
+        { role: 'close', label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W' },
+        { type: 'separator' },
         { role: 'minimize' },
         { role: 'zoom' },
-        { role: 'close' },
         ...(mac ? [{ type: 'separator' }, { role: 'front' }] : [])
       ]
     }
@@ -70,7 +85,7 @@ function createWindow() {
     if (isQuitting) return;
     // where closing the last window quits the app, that close *is* the quit
     if (process.platform !== 'darwin' && BrowserWindow.getAllWindows().length <= 1) return;
-    lastFolder = null;
+    workspace = { folder: null, tabs: [], active: null };
     saveWindowState();
   });
   win.loadFile(path.join(__dirname, 'index.html'));
@@ -91,8 +106,17 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('last-folder', () => lastFolder);
-ipcMain.handle('set-last-folder', (_e, p) => { lastFolder = p || null; saveWindowState(); return true; });
+ipcMain.handle('get-workspace', () => workspace);
+ipcMain.handle('set-workspace', (_e, patch) => {
+  workspace = { ...workspace, ...patch };
+  saveWindowState();
+  return true;
+});
+ipcMain.handle('close-window', e => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win) win.close();
+  return true;
+});
 
 async function readPdf(p) {
   const buf = await fs.readFile(p);

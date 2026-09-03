@@ -48,6 +48,9 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Alt+Enter` | Hide the source, keep only the rendered note |
 | `Ctrl+Shift+⌫` | Delete the note you are in |
 | `Cmd+⌫` / `Ctrl+⌫` | Move the open file to the Trash |
+| `Cmd+W` / `Ctrl+W` | Close the tab, then the window when none are left |
+| `Ctrl+Tab` | Next tab (`Ctrl+Shift+Tab` for the previous) |
+| `Cmd+1…9` | Jump to a tab by position |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
@@ -107,16 +110,30 @@ If you don't want any of this, turn **Lecture recording** off in `Ctrl+,` —
 the Record button, the player and the note timestamps all disappear. Nothing
 already on disk is deleted, and switching it back on brings it all back.
 
-## Windows and the open folder
+## Tabs, windows and the open folder
 
-Margin follows VS Code here. `Cmd+Q` quits with the workspace intact — the next
-launch comes back to the same folder. `Cmd+W` closes the window and ends the
+Files open as tabs, the way they do in a browser, Obsidian or VS Code. Opening
+a file that is already open goes to its tab rather than opening it twice.
+Switch with a click, `Ctrl+Tab`, or `Cmd+1…9`; close with the `×`, a middle
+click, or `Cmd+W`.
+
+Each tab keeps its own document: a PDF holds its own notes, highlights, zoom
+level, rendered pages and scroll position, so coming back to a lecture is
+instant and lands exactly where you left it.
+
+Margin follows VS Code for the window itself. `Cmd+W` closes the current tab,
+and once no tabs are left it closes the window; `Cmd+Shift+W` closes the window
+outright. `Cmd+Q` quits with the workspace intact — the next launch comes back
+to the same folder *and* the same tabs. Closing the window instead ends the
 workspace: on macOS the app stays running with no window, and the next window
-you open (from the Dock) starts empty.
+you open starts empty.
 
-The open folder is therefore remembered by the app itself, in
-`window-state.json` under the user data directory, since only the main process
-can tell a quit apart from a window close.
+Restored tabs are empty shells until you click them, so a workspace of twenty
+lectures still starts instantly.
+
+The workspace is therefore remembered by the app itself, in `window-state.json`
+under the user data directory, since only the main process can tell a quit
+apart from a window close.
 
 ## Themes
 

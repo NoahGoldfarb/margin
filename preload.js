@@ -22,9 +22,12 @@ contextBridge.exposeInMainWorld('margin', {
   // search
   walkDir:      root          => ipcRenderer.invoke('walk-dir', root),
 
-  // which folder to reopen next launch (owned by the main process)
-  lastFolder:    ()  => ipcRenderer.invoke('last-folder'),
-  setLastFolder: p   => ipcRenderer.invoke('set-last-folder', p),
+  // the workspace to come back to — folder and open tabs (owned by main)
+  getWorkspace:  ()      => ipcRenderer.invoke('get-workspace'),
+  setWorkspace:  patch   => ipcRenderer.invoke('set-workspace', patch),
+  closeWindow:   ()      => ipcRenderer.invoke('close-window'),
+  // Cmd+W: close the open tab, or the window when none are left
+  onCloseRequest: cb => ipcRenderer.on('close-request', () => cb()),
 
   // lecture audio
   audioPath:    p                  => ipcRenderer.invoke('audio-path', p),
