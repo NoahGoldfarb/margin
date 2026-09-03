@@ -408,6 +408,22 @@
       color: var(--chrome-strong)
     }
 
+    .tree-row.dragging {
+      opacity: .4
+    }
+
+    .tree-row.drop-target {
+      background: var(--pen-soft);
+      box-shadow: inset 0 0 0 1px var(--pen);
+    }
+
+    /* dropping on the sidebar's empty space (or its header) sends the file
+       to the workspace root — same idea, so it gets the same feedback */
+    #tree.drop-target-root,
+    #sidebar-head.drop-target-root {
+      box-shadow: inset 0 0 0 1px var(--pen);
+    }
+
     .tree-row .arrow {
       width: 10px;
       flex: 0 0 10px;
@@ -1768,7 +1784,8 @@
       <p style="color:var(--chrome-dim);margin:10px 0 0;line-height:1.6">
         Open a folder to browse its PDFs and Markdown notes in the sidebar.
         Click the <strong>＋</strong> or right-click for a new note or folder;
-        right-click any item to rename or delete it.
+        right-click any item to rename or delete it; drag an item onto a
+        folder — or the empty sidebar — to move it.
       </p>
     </div>
   </div>
@@ -3272,6 +3289,7 @@
 
         row.addEventListener('click', () => onTreeClick(entry));
         row.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showTreeMenu(e, entry); });
+        wireDragAndDrop(row, entry);
         frag.appendChild(row);
 
         if (entry.isDir && expandedDirs.has(entry.path)) {
@@ -3453,6 +3471,69 @@
       for (const key of [...expandedDirs]) if (isUnder(key, root, isDir)) expandedDirs.delete(key);
     }
 
+    /* ------------------------------------------------------------------ *
+     *  drag-and-drop moves in the sidebar, VS Code style
+     * ------------------------------------------------------------------ */
+    let dragEntry = null;
+    // outlives dragEntry, which a drop target clears before the event finishes
+    // bubbling to window — this is what the window-level PDF-drop guard checks
+    let internalDragActive = false;
+
+    function canDropInto(destDir) {
+      if (!dragEntry) return false;
+      if (destDir === dirOf(dragEntry.path)) return false;       // already there
+      if (isUnder(destDir, dragEntry.path, dragEntry.isDir)) return false; // into itself/its own child
+      return true;
+    }
+
+    async function moveEntry(entry, destDir) {
+      const to = destDir + '/' + entry.name;
+      if (to === entry.path) return;
+      const ok = await window.margin.renamePath(entry.path, to);
+      if (!ok) { toast(`Could not move "${entry.name}" — something with that name is already there`); return; }
+      const from = entry.path;
+      retargetPaths(from, to, entry.isDir);
+      await invalidateAndReload(dirOf(from));
+      await invalidateAndReload(destDir);
+      if (State.activeFile) $('#docname').textContent = State.activeFile.path.split('/').pop();
+      toast(`Moved "${entry.name}"`);
+    }
+
+    function wireDragAndDrop(row, entry) {
+      row.draggable = true;
+      row.addEventListener('dragstart', e => {
+        dragEntry = entry;
+        internalDragActive = true;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', entry.path); // required for some platforms to start the drag
+        requestAnimationFrame(() => row.classList.add('dragging'));
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        dragEntry = null;
+        internalDragActive = false;
+        $('#tree').classList.remove('drop-target-root');
+        $('#sidebar-head').classList.remove('drop-target-root');
+      });
+      if (!entry.isDir) return; // only folders (and the root, wired separately) accept a drop
+      row.addEventListener('dragover', e => {
+        if (!canDropInto(entry.path)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.classList.add('drop-target');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+      row.addEventListener('drop', async e => {
+        e.preventDefault(); e.stopPropagation();
+        row.classList.remove('drop-target');
+        if (!canDropInto(entry.path)) return;
+        const moving = dragEntry;
+        dragEntry = null;
+        expandedDirs.add(entry.path);
+        await moveEntry(moving, entry.path);
+      });
+    }
+
     async function deleteEntry(entry) {
       const extra = !entry.isDir && /\.pdf$/i.test(entry.name)
         ? '\n\nIts notes and any lecture recording go with it.' : '';
@@ -3504,6 +3585,28 @@
       if (e.target.closest('.tree-row') || !State.folder) return;
       e.preventDefault(); showRootMenu(e);
     });
+
+    // dropping on the empty part of the tree, or the folder-name header,
+    // sends a file back up to the workspace root
+    for (const el of [$('#tree'), $('#sidebar-head')]) {
+      el.addEventListener('dragover', e => {
+        if (e.target.closest('.tree-row') || !State.folder || !canDropInto(State.folder)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        el.classList.add('drop-target-root');
+      });
+      el.addEventListener('dragleave', e => {
+        if (e.target === el) el.classList.remove('drop-target-root');
+      });
+      el.addEventListener('drop', async e => {
+        el.classList.remove('drop-target-root');
+        if (e.target.closest('.tree-row') || !State.folder || !canDropInto(State.folder)) return;
+        e.preventDefault(); e.stopPropagation();
+        const moving = dragEntry;
+        dragEntry = null;
+        if (moving) await moveEntry(moving, State.folder);
+      });
+    }
 
     /* ------------------------------------------------------------------ *
      *  page layout — pages are sliced at every note position
@@ -4258,10 +4361,14 @@
     /* ------------------------------------------------------------------ *
      *  drag & drop, export, toast
      * ------------------------------------------------------------------ */
-    window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging'); });
+    window.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!internalDragActive) document.body.classList.add('dragging'); // not the "drop a PDF" glow mid tree-move
+    });
     window.addEventListener('dragleave', () => document.body.classList.remove('dragging'));
     window.addEventListener('drop', async e => {
       e.preventDefault(); document.body.classList.remove('dragging');
+      if (internalDragActive) return; // an internal tree move, already handled by its own drop target
       const f = e.dataTransfer.files[0]; if (!f || !/\.pdf$/i.test(f.name)) return;
       const path = hasShell ? window.margin.pathFor(f) : null;
       openBytes(new Uint8Array(await f.arrayBuffer()), f.name, path);

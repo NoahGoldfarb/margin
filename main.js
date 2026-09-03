@@ -225,7 +225,12 @@ ipcMain.handle('create-folder', async (_e, dir, name) => {
   catch { return null; }
 });
 
+// Used for both the rename UI and drag-to-move in the sidebar — either way,
+// landing on an existing name should refuse, not silently overwrite it.
 ipcMain.handle('rename-path', async (_e, from, to) => {
+  if (from === to) return true;
+  const collides = await fs.access(to).then(() => true).catch(() => false);
+  if (collides) return false;
   try { await fs.rename(from, to); return true; }
   catch { return false; }
 });

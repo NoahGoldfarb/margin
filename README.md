@@ -171,6 +171,12 @@ $$\frac{\partial u}{\partial t} = \alpha \nabla^2 u$$
 Each note stores the page number and its position on that page as a fraction
 of the page height, so it stays on the right line at any zoom level.
 
+Drag a file or folder onto another folder in the sidebar to move it there —
+or onto the empty space below the tree (or the folder-name header) to send it
+back to the workspace root. A move never overwrites an existing file with the
+same name; it refuses instead. Any open tab, and the sidecar notes and
+recording that belong to a moved PDF, follow it automatically.
+
 Deleting a file — `Cmd+⌫`, or right-click in the sidebar — moves it to the
 system Trash rather than erasing it, and a PDF takes its notes and recording
 along with it so nothing is left orphaned.
