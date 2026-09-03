@@ -104,6 +104,8 @@ ipcMain.handle('open-folder', async () => {
 // to it on disk on purpose, but it is not a document — keep it out of the tree.
 const isSidecar = name => /\.margin\.(json|webm|ogg|m4a|mp3|wav)$/i.test(name);
 
+// null (not []) when the directory is gone or unreadable, so the caller can
+// tell "empty folder" apart from "that folder isn't there any more"
 ipcMain.handle('read-dir', async (_e, dir) => {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -111,7 +113,7 @@ ipcMain.handle('read-dir', async (_e, dir) => {
       .filter(e => !e.name.startsWith('.') && !isSidecar(e.name))
       .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
       .sort((a, b) => a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name));
-  } catch { return []; }
+  } catch { return null; }
 });
 
 ipcMain.handle('read-text', async (_e, p) => {

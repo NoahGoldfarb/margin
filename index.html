@@ -2658,19 +2658,29 @@
     async function openFolder(pathArg) {
       const dir = pathArg || (hasShell ? await window.margin.openFolder() : null);
       if (!dir) return;
+      // a remembered folder can be deleted, renamed, or on a drive that is no
+      // longer plugged in — don't reopen a sidebar onto nothing
+      const entries = await window.margin.readDir(dir);
+      if (entries === null) {
+        if (localStorage.getItem('margin:last-folder') === dir) {
+          localStorage.removeItem('margin:last-folder');
+        }
+        toast(`Folder no longer available: ${dir.split('/').filter(Boolean).pop() || dir}`);
+        return;
+      }
       State.folder = dir;
       treeCache.clear(); expandedDirs.clear();
+      treeCache.set(dir, entries);
       document.body.classList.add('has-folder');
       $('#sidebar-name').textContent = dir.split('/').filter(Boolean).pop() || dir;
       localStorage.setItem('margin:last-folder', dir);
-      await ensureDirLoaded(dir);
       renderTree();
       if (!State.activeFile) { setMode('empty'); }
     }
 
     async function ensureDirLoaded(dir) {
       if (treeCache.has(dir)) return treeCache.get(dir);
-      const entries = await window.margin.readDir(dir);
+      const entries = await window.margin.readDir(dir) || [];
       treeCache.set(dir, entries);
       return entries;
     }
