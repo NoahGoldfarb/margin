@@ -2265,10 +2265,12 @@
       if (source._snippetIndex < source._snippetStops.length) {
         const position = source._snippetStops[source._snippetIndex];
         source.setSelectionRange(position, position);
-      } else {
-        source._snippetStops = null;
+        return true;
       }
-      return true;
+      // past the last stop — nothing left to jump to, so let this same Tab
+      // press fall through to tabOut() instead of swallowing it as a no-op
+      source._snippetStops = null;
+      return false;
     }
 
     /* ------------------------------------------------------------------ *
