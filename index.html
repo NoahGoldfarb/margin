@@ -4149,8 +4149,14 @@
     }
 
     function autoGrow(ta) {
+      // collapsing to 'auto' to measure would briefly shrink the page, which
+      // clamps the pane's scrollTop and leaves the caret pinned to the bottom
+      // edge — hold the parent's height so the scroll position survives
+      const box = ta.parentElement;
+      box.style.minHeight = box.offsetHeight + 'px';
       ta.style.height = 'auto';
       ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
+      box.style.minHeight = '';
     }
 
     function splitAt(h) {
