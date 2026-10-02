@@ -71,7 +71,7 @@ that exact position and start a note.
 
 Normal Markdown, with math in `$…$` inline or `$$…$$` on its own line.
 `\(…\)` and `\[…\]` work too. Click a note once to edit its complete text as
-a normal Markdown file. Press `Esc` to compile it back to the rendered
+a normal Markdown file; the caret lands on the spot you clicked. Press `Esc` to compile it back to the rendered
 preview. `Enter` inserts a normal new line while editing. Dollar amounts like
 $5 are left alone.
 

@@ -2900,9 +2900,27 @@
       let s = src.replace(CODE_RE, m => (code.push(m), `\u0000C${code.length - 1}\u0000`));
       s = s.replace(MATH_RE, m => (math.push(m), `\u0000M${math.length - 1}\u0000`));
       s = s.replace(/\u0000C(\d+)\u0000/g, (_, i) => code[+i]);
-      let html = window.marked ? marked.parse(s, { breaks: true, gfm: true }) : escapeHtml(s);
-      html = html.replace(/\u0000M(\d+)\u0000/g, (_, i) => escapeHtml(math[+i]));
-      target.innerHTML = html;
+      const unmath = (h, esc = escapeHtml) => h.replace(/\u0000M(\d+)\u0000/g, (_, i) => esc(math[+i]));
+      if (window.marked) {
+        // one top-level block at a time, so every rendered block knows which
+        // slice of the source it came from (data-src="start:end") — that is
+        // what lets a click on the preview put the caret in the right place
+        const opts = { breaks: true, gfm: true };
+        const tokens = marked.lexer(s, opts);
+        target.innerHTML = '';
+        let at = 0;
+        for (const token of tokens) {
+          const raw = unmath(token.raw, m => m);
+          const found = src.indexOf(raw, at);
+          const start = found < 0 ? at : found;
+          at = start + raw.length;
+          if (token.type === 'space') continue;
+          const block = document.createElement('template');
+          block.innerHTML = unmath(marked.parser(Object.assign([token], { links: tokens.links }), opts));
+          for (const el of block.content.children) el.dataset.src = start + ':' + at;
+          target.append(block.content);
+        }
+      } else target.innerHTML = unmath(escapeHtml(s));
       if (window.renderMathInElement) {
         try {
           renderMathInElement(target, {
@@ -2919,6 +2937,138 @@
     }
     function escapeHtml(s) {
       return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    }
+
+    // Where in `src` is the spot the user clicked at (x, y) in its rendered
+    // preview? Finds the block under the click, then walks its visible text
+    // alongside the block's source, skipping Markdown syntax; each formula
+    // counts as one unit. Returns null when the click is not on any block.
+    function sourceOffsetAt(rendered, src, x, y) {
+      let node = null, offset = 0;
+      if (document.caretPositionFromPoint) {
+        const p = document.caretPositionFromPoint(x, y);
+        if (p) { node = p.offsetNode; offset = p.offset; }
+      } else if (document.caretRangeFromPoint) {
+        const r = document.caretRangeFromPoint(x, y);
+        if (r) { node = r.startContainer; offset = r.startOffset; }
+      }
+      if (!node || !rendered.contains(node)) return null;
+      const el = node.nodeType === 1 ? node : node.parentElement;
+      const block = el.closest('[data-src]');
+      if (!block || !rendered.contains(block)) return null;
+      const [start, end] = block.dataset.src.split(':').map(Number);
+
+      // the visible text before and after the caret; MATH marks a formula
+      const MATH = {}, before = [], after = [];
+      const caret = document.createRange(); caret.setStart(node, offset);
+      const FORMULA = '.katex, .katex-error';
+      const caretFormula = el.closest(FORMULA);
+      let seen = null, past = false;
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+        { acceptNode: n => n.nodeType === 3 || n.tagName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
+      for (let t; (t = walker.nextNode());) {
+        const kx = (t.nodeType === 3 ? t.parentElement : t).closest(FORMULA);
+        if (!past) {
+          if (t === node && !kx) {
+            before.push(t.data.slice(0, offset)); after.push(t.data.slice(offset));
+            past = true; continue;
+          }
+          past = (kx && kx === caretFormula) || caret.comparePoint(t, 0) >= 0;
+        }
+        const list = past ? after : before;
+        if (kx) { if (kx !== seen) list.push(MATH); seen = kx; }
+        else list.push(t.nodeType === 3 ? t.data : '\n');
+        if (past && after.some(p => p === MATH || /\S/.test(p))) break;
+      }
+
+      // formulas in this block, found the way renderMarkdown finds them
+      const spans = [];
+      const blanked = src.replace(CODE_RE, m => m.replace(/[^\n]/g, ' '));
+      for (const m of blanked.matchAll(MATH_RE))
+        if (m.index >= start && m.index < end) spans.push({ start: m.index, end: m.index + m[0].length });
+      const nextSpan = from => spans.find(sp => sp.start >= from);
+      const seek = (from, test) => {
+        for (let j = from; j < end; j++) {
+          const sp = spans.find(sp => sp.start === j);
+          if (sp) { j = sp.end - 1; continue; }
+          if (test(src[j])) return j;
+        }
+        return -1;
+      };
+
+      let i = start;
+      for (const piece of before) {
+        if (piece === MATH) { const sp = nextSpan(i); if (sp) i = sp.end; continue; }
+        for (let k = 0; k < piece.length; k++) {
+          if (/\s/.test(piece[k])) continue;
+          const j = seek(i, c => c === piece[k]);
+          if (j >= 0) i = j + 1;
+        }
+      }
+      // land right before whatever follows the caret, past any syntax between
+      const text = before.filter(p => p !== MATH).join('');
+      const tail = after.filter(p => p !== MATH).join('');
+      const next = after.find(p => p === MATH || /\S/.test(p));
+      if (caretFormula) {
+        const sp = nextSpan(i);
+        if (sp) i = sp.start + (/^(\$\$|\\\[|\\\()/.test(src.slice(sp.start)) ? 2 : 1);
+      } else if (/^\s/.test(tail) && /\S$/.test(text)) {
+        const j = seek(i, c => /\s/.test(c)); if (j >= 0) i = j;
+      } else if (next === MATH) {
+        const sp = nextSpan(i); if (sp) i = sp.start;
+      } else if (next) {
+        const ch = next.trim()[0], j = seek(i, c => c === ch); if (j >= 0) i = j;
+      }
+      return Math.min(i, end);
+    }
+
+    // The caret's vertical position in a textarea, in viewport pixels —
+    // measured on an invisible copy with the same text layout
+    function caretClientY(ta, pos) {
+      const cs = getComputedStyle(ta), copy = document.createElement('div');
+      for (const p of ['boxSizing', 'width', 'padding', 'border', 'font', 'letterSpacing',
+        'lineHeight', 'tabSize', 'textIndent', 'textTransform', 'wordSpacing'])
+        copy.style[p] = cs[p];
+      Object.assign(copy.style, {
+        position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px',
+        whiteSpace: 'pre-wrap', overflowWrap: 'break-word'
+      });
+      copy.textContent = ta.value.slice(0, pos);
+      const mark = document.createElement('span'); mark.textContent = '​';
+      copy.appendChild(mark);
+      document.body.appendChild(copy);
+      const y = ta.getBoundingClientRect().top + mark.offsetTop - ta.scrollTop;
+      copy.remove();
+      return y;
+    }
+
+    // Scroll whatever holds `el` by `dy` pixels
+    function scrollAncestorBy(el, dy) {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const o = getComputedStyle(p).overflowY;
+        if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) { p.scrollTop += dy; return; }
+      }
+      window.scrollBy(0, dy);
+    }
+
+    // Open `source` for editing with the caret at the clicked spot of its
+    // preview, kept at the same height on screen. Clicks made by code
+    // (opening a new note, jumping to a search hit) still go to the end.
+    function editAtClick(source, rendered, e, show) {
+      const at = e && e.isTrusted ? sourceOffsetAt(rendered, source.value, e.clientX, e.clientY) : null;
+      show();
+      if (at == null) {
+        source.focus();
+        source.setSelectionRange(source.value.length, source.value.length);
+        autoGrow(source);
+        return;
+      }
+      autoGrow(source);
+      source.focus({ preventScroll: true });
+      source.setSelectionRange(at, at);
+      const lineHeight = parseFloat(getComputedStyle(source).lineHeight) || 0;
+      const dy = caretClientY(source, at) + lineHeight / 2 - e.clientY;
+      if (Math.abs(dy) > 2) scrollAncestorBy(source, dy);
     }
 
     /* ------------------------------------------------------------------ *
@@ -3593,12 +3743,9 @@
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
       };
-      const edit = () => {
+      const edit = e => {
         focusPane(pane);
-        source.hidden = false; rendered.hidden = true;
-        source.focus();
-        source.setSelectionRange(source.value.length, source.value.length);
-        autoGrow(source);
+        editAtClick(source, rendered, e, () => { source.hidden = false; rendered.hidden = true; });
       };
       source.addEventListener('input', () => {
         updateSnippetStops(source); autoGrow(source);
@@ -4122,14 +4269,11 @@
         el.classList.remove('is-editing');
         saveOwner();
       };
-      const edit = () => {
+      const edit = e => editAtClick(source, rendered, e, () => {
         source.hidden = false;
         rendered.hidden = true;
         el.classList.add('is-editing');
-        source.focus();
-        source.setSelectionRange(source.value.length, source.value.length);
-        autoGrow(source);
-      };
+      });
       source.addEventListener('input', () => {
         note.md = source.value; updateSnippetStops(source); autoGrow(source); saveOwner();
       });
