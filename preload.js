@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('margin', {
   readDir:      dir           => ipcRenderer.invoke('read-dir', dir),
   readText:     p             => ipcRenderer.invoke('read-text', p),
   writeText:    (p, content)  => ipcRenderer.invoke('write-text', p, content),
+  writeBinary:  (p, bytes)    => ipcRenderer.invoke('write-binary', p, bytes),
   createFile:   (dir, name)   => ipcRenderer.invoke('create-file', dir, name),
   createFolder: (dir, name)   => ipcRenderer.invoke('create-folder', dir, name),
   renamePath:   (from, to)    => ipcRenderer.invoke('rename-path', from, to),

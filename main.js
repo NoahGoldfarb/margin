@@ -213,6 +213,14 @@ ipcMain.handle('write-text', async (_e, p, content) => {
   return true;
 });
 
+// pictures pasted into notes (GeoGebra snapshots) — into a folder that may not exist yet
+ipcMain.handle('write-binary', async (_e, p, bytes) => {
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p + '.tmp', Buffer.from(bytes));
+  await fs.rename(p + '.tmp', p);
+  return true;
+});
+
 ipcMain.handle('create-file', async (_e, dir, name) => {
   const target = path.join(dir, name);
   try { await fs.writeFile(target, '', { flag: 'wx' }); return target; }

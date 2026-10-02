@@ -21,6 +21,8 @@ npm run vendor
 ```
 
 The app checks `vendor/` first and only falls back to a CDN if it is missing.
+GeoGebra is not on npm; `npm run vendor -- --geogebra` downloads it once
+(about 50 MB) into `vendor/geogebra`.
 
 To build an installer: `npx electron-builder` (or `npm run dist`).
 
@@ -55,6 +57,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
+| `ggb` + `Tab` | Open GeoGebra; `Cmd+Enter` (`Ctrl+Enter`), then drag over the graph to insert that area as a picture |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
 | `Ctrl+Shift+O` | Open a folder in the sidebar |
@@ -97,6 +100,16 @@ Three more things happen automatically inside math:
   type straight through a nested expression without reaching for the arrow keys.
 - Brackets pair themselves, typing the closing one steps over it, and
   backspace between an empty pair removes both halves.
+
+### Graphs with GeoGebra
+
+Type `ggb` on its own line and press Tab. GeoGebra opens over the note; draw
+or type your graph, press `Cmd+Enter` (or click **Insert area**) and drag over
+the part you want — a click without dragging takes the whole graph. That area
+is saved as a picture next to the document (`lecture.pdf` →
+`lecture.assets/ggb-….png`) and linked into the note. It is a picture, not a
+live graph. GeoGebra keeps your construction until you quit, so the next
+`ggb` picks up where you left off. `Esc` goes back to the note.
 
 ## Tables
 

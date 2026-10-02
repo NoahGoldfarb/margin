@@ -561,6 +561,104 @@
       transform: scale(.96)
     }
 
+    /* ---------- GeoGebra ("ggb" + Tab) ---------- */
+    #ggb-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px 18px 18px;
+      background: rgba(10, 13, 18, .86);
+      animation: fade-in .12s var(--ease);
+    }
+
+    #ggb-modal.hidden {
+      display: none
+    }
+
+    #ggb-modal .ggb-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--chrome-text);
+      font-size: 13px;
+    }
+
+    #ggb-modal .ggb-bar .grow {
+      flex: 1
+    }
+
+    #ggb-modal kbd {
+      font: 11px var(--mono);
+      padding: 1px 5px;
+      border: 1px solid var(--rule-strong);
+      border-radius: 3px;
+      color: var(--chrome-strong);
+    }
+
+    #ggb-modal button {
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 6px 12px;
+      background: var(--ink);
+      color: var(--chrome-text);
+      cursor: pointer;
+      font: inherit;
+      transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+    }
+
+    #ggb-modal button:hover {
+      border-color: var(--rule-strong);
+      color: var(--chrome-strong)
+    }
+
+    #ggb-modal button.primary {
+      background: var(--pen);
+      border-color: var(--pen);
+      color: #fff
+    }
+
+    #ggb-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+      animation: modal-in .16s var(--ease);
+    }
+
+    #ggb-applet {
+      position: absolute;
+      inset: 0
+    }
+
+    #ggb-select {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+      background: rgba(10, 13, 18, .18);
+    }
+
+    #ggb-select.hidden,
+    #ggb-select .rect.hidden {
+      display: none
+    }
+
+    #ggb-select .rect {
+      position: absolute;
+      border: 1.5px dashed var(--pen);
+      background: var(--pen-faint);
+      box-shadow: 0 0 0 9999px rgba(10, 13, 18, .25);
+    }
+
+    .note-render img {
+      max-width: 100%;
+      border-radius: 4px;
+    }
+
     /* ---------- settings ---------- */
     #settings-modal {
       position: absolute;
@@ -1770,6 +1868,8 @@
         <dd>Expand a snippet, jump to the next <code>$0</code> slot, or step out of <code>}</code></dd>
         <dt>tbl + Tab</dt>
         <dd>Insert a table (<code>tbl4x5</code> for 4 columns × 5 rows); Tab / Shift+Tab move between cells, Enter adds a row</dd>
+        <dt>ggb + Tab</dt>
+        <dd>Open GeoGebra; <code>⌘+Enter</code> and drag over the graph to insert that area as a picture</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
@@ -1894,6 +1994,19 @@
         <button class="action" id="prompt-cancel">Cancel</button>
         <button class="action" id="prompt-ok">OK</button>
       </div>
+    </div>
+  </div>
+
+  <div id="ggb-modal" class="hidden">
+    <div class="ggb-bar">
+      <span id="ggb-hint"></span>
+      <span class="grow"></span>
+      <button id="ggb-cancel">Cancel</button>
+      <button id="ggb-capture" class="primary">Insert area</button>
+    </div>
+    <div id="ggb-stage">
+      <div id="ggb-applet"></div>
+      <div id="ggb-select" class="hidden"><div class="rect hidden"></div></div>
     </div>
   </div>
 
@@ -2526,6 +2639,189 @@
       return true;
     }
 
+    /* ------------------------------------------------------------------ *
+     *  GeoGebra — "ggb" + Tab opens it over the note; drag over the graph
+     *  and that area lands in the note as a picture (not interactive). The
+     *  applet stays alive between uses, so the next "ggb" picks up the same
+     *  construction. Pictures go next to the document: lecture.assets/…png
+     * ------------------------------------------------------------------ */
+    const GGB_DEPLOY = ['vendor/geogebra/deployggb.js', 'https://www.geogebra.org/apps/deployggb.js'];
+    let ggbApi = null, ggbLoading = null;
+    let ggbTarget = null; // { source, pos } — the note waiting for the picture
+
+    function expandGeoGebra(source) {
+      const value = source.value, pos = source.selectionStart;
+      if (pos !== source.selectionEnd) return false;
+      const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+      if (!/^\s*ggb$/.test(value.slice(lineStart, pos)) || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
+      if (isMathMode(value.slice(0, pos)) || inCodeFence(value.slice(0, pos))) return false;
+      source.setRangeText('', lineStart, pos, 'end');
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      openGeoGebra(source);
+      return true;
+    }
+
+    // the document a note editor belongs to (a .md file or the PDF), if any
+    const docOf = el => (el.closest('[data-doc]') || {}).dataset?.doc || '';
+
+    function loadGeoGebra() {
+      ggbLoading = ggbLoading || (async () => {
+        const url = await loadScript(GGB_DEPLOY);
+        const box = $('#ggb-applet');
+        ggbApi = await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('timed out')), 30000);
+          const applet = new GGBApplet({
+            appName: 'graphing', width: box.clientWidth, height: box.clientHeight,
+            showToolBar: true, showAlgebraInput: true, showMenuBar: false,
+            enableShiftDragZoom: true, enableRightClick: true, showResetIcon: false,
+            showKeyboardOnFocus: false, // a laptop has a real one, and it ate a third of the graph
+            appletOnLoad: api => { clearTimeout(timer); resolve(api); }
+          }, true);
+          if (url.startsWith('vendor/')) applet.setHTML5Codebase('vendor/geogebra/HTML5/5.0/web3d/');
+          applet.inject('ggb-applet');
+        });
+      })().catch(e => { ggbLoading = null; $('#ggb-applet').innerHTML = ''; throw e; });
+      return ggbLoading;
+    }
+
+    function fitGeoGebra() {
+      const box = $('#ggb-applet');
+      if (ggbApi && box.clientWidth) ggbApi.setSize(box.clientWidth, box.clientHeight);
+    }
+    window.addEventListener('resize', () => { if (ggbTarget) fitGeoGebra(); });
+
+    const GGB_HINT = 'Draw your graph, then <kbd>' + (isMac ? '⌘' : 'Ctrl') +
+      '+Enter</kbd> or <b>Insert area</b> and drag over the part you want';
+    const GGB_SELECT_HINT = 'Drag over the area to insert · <kbd>Enter</kbd> for the whole graph · <kbd>Esc</kbd> to go back';
+
+    async function openGeoGebra(source) {
+      ggbTarget = { source, pos: source.selectionStart };
+      $('#ggb-modal').classList.remove('hidden');
+      $('#ggb-hint').innerHTML = ggbApi ? GGB_HINT : 'Loading GeoGebra…';
+      try {
+        await loadGeoGebra();
+        if (!ggbTarget) return; // cancelled while it loaded
+        fitGeoGebra();
+        $('#ggb-hint').innerHTML = GGB_HINT;
+      } catch (e) {
+        closeGeoGebra();
+        toast('GeoGebra could not load — it needs internet, or run "npm run vendor -- --geogebra" once');
+      }
+    }
+
+    function closeGeoGebra() {
+      ggbSelecting(false);
+      $('#ggb-modal').classList.add('hidden');
+      const t = ggbTarget;
+      ggbTarget = null;
+      if (t && t.source.isConnected) { t.source.focus(); autoGrow(t.source); }
+    }
+
+    function ggbSelecting(on) {
+      $('#ggb-select').classList.toggle('hidden', !on);
+      $('#ggb-select .rect').classList.add('hidden');
+      if (ggbTarget) $('#ggb-hint').innerHTML = on ? GGB_SELECT_HINT : GGB_HINT;
+    }
+
+    // The graphics view on screen: the canvas the size GeoGebra reports for it
+    function ggbGraphicsRect() {
+      const view = JSON.parse(ggbApi.getViewProperties(1));
+      const rects = [...$('#ggb-applet').querySelectorAll('canvas')]
+        .map(c => c.getBoundingClientRect()).filter(r => r.width && r.height);
+      const fit = r => Math.abs(r.width - view.width) + Math.abs(r.height - view.height);
+      return rects.sort((a, b) => fit(a) - fit(b))[0] || null;
+    }
+
+    // Cut `area` (viewport pixels, null = all of it) out of the graphics
+    // view, rendered by GeoGebra itself at twice the size so it stays sharp
+    // and none of the tool UI ends up in the picture
+    async function ggbSnapshot(area) {
+      const view = ggbGraphicsRect();
+      if (!view) throw new Error('no graphics view');
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + ggbApi.getPNGBase64(2, false, 144);
+      await img.decode();
+      const left = Math.max(view.left, area ? area.left : -Infinity);
+      const top = Math.max(view.top, area ? area.top : -Infinity);
+      const right = Math.min(view.right, area ? area.right : Infinity);
+      const bottom = Math.min(view.bottom, area ? area.bottom : Infinity);
+      if (right - left < 4 || bottom - top < 4) return null;
+      const fx = img.naturalWidth / view.width, fy = img.naturalHeight / view.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round((right - left) * fx); canvas.height = Math.round((bottom - top) * fy);
+      canvas.getContext('2d').drawImage(img, (left - view.left) * fx, (top - view.top) * fy,
+        canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    }
+
+    async function ggbInsert(area) {
+      const t = ggbTarget;
+      if (!t || !ggbApi) return;
+      let dataUrl;
+      try { dataUrl = await ggbSnapshot(area); }
+      catch (e) { toast('Could not capture the graph: ' + e.message); return; }
+      if (!dataUrl) { toast('That area is outside the graph'); ggbSelecting(true); return; }
+
+      // next to the document when there is one on disk; inline otherwise
+      let link = dataUrl;
+      const doc = docOf(t.source);
+      if (hasShell && doc) {
+        const stem = doc.replace(/\.[^./]+$/, '');
+        const d = new Date(), pad = n => String(n).padStart(2, '0');
+        const name = `ggb-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-` +
+          `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+        const folder = stem.split('/').pop() + '.assets';
+        const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), c => c.charCodeAt(0));
+        try { await window.margin.writeBinary(dirOf(stem) + '/' + folder + '/' + name, bytes); }
+        catch (e) { toast('Could not save the picture: ' + e.message); return; }
+        link = encodeURIComponent(folder) + '/' + name;
+      }
+      const { source, pos } = t;
+      const after = source.value.slice(pos);
+      const text = `![GeoGebra](${link})` + (after && !after.startsWith('\n') ? '\n' : '');
+      source.setRangeText(text, pos, pos, 'end');
+      source.setSelectionRange(pos + text.length, pos + text.length);
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      closeGeoGebra();
+    }
+
+    $('#ggb-cancel').onclick = () => closeGeoGebra();
+    $('#ggb-capture').onclick = () => { if (ggbApi) ggbSelecting(true); };
+    (() => {
+      const layer = $('#ggb-select'), rect = layer.querySelector('.rect');
+      let from = null;
+      const box = e => ({
+        left: Math.min(from.x, e.clientX), top: Math.min(from.y, e.clientY),
+        right: Math.max(from.x, e.clientX), bottom: Math.max(from.y, e.clientY)
+      });
+      layer.addEventListener('mousedown', e => { from = { x: e.clientX, y: e.clientY }; e.preventDefault(); });
+      window.addEventListener('mousemove', e => {
+        if (!from) return;
+        const b = box(e), at = layer.getBoundingClientRect();
+        rect.classList.remove('hidden');
+        Object.assign(rect.style, {
+          left: b.left - at.left + 'px', top: b.top - at.top + 'px',
+          width: b.right - b.left + 'px', height: b.bottom - b.top + 'px'
+        });
+      });
+      window.addEventListener('mouseup', e => {
+        if (!from) return;
+        const b = box(e); from = null;
+        // a click without a drag takes the whole graph
+        ggbInsert(b.right - b.left < 6 && b.bottom - b.top < 6 ? null : b);
+      });
+    })();
+    // capture phase: GeoGebra's own keyboard handling would swallow these
+    window.addEventListener('keydown', e => {
+      if (!ggbTarget) return;
+      const selecting = !$('#ggb-select').classList.contains('hidden');
+      if (e.key === 'Escape') { selecting ? ggbSelecting(false) : closeGeoGebra(); }
+      else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && ggbApi) ggbSelecting(true);
+      else if (e.key === 'Enter' && selecting) ggbInsert(null);
+      else return;
+      e.preventDefault(); e.stopPropagation();
+    }, true);
+
     // Shared by both note editors. Returns true when the key was consumed.
     function handleMathKey(source, e) {
       if (e.isComposing) return false;
@@ -2535,7 +2831,7 @@
       }
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (moveSnippetTab(source) || expandTable(source) || expandSnippet(source, false) ||
+        if (moveSnippetTab(source) || expandTable(source) || expandGeoGebra(source) || expandSnippet(source, false) ||
           tableTab(source, false) || tabOut(source)) return true;
         source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
         source.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2921,6 +3217,14 @@
           target.append(block.content);
         }
       } else target.innerHTML = unmath(escapeHtml(s));
+      const doc = docOf(target);
+      if (doc) {
+        const base = 'file://' + dirOf(doc).split('/').map(encodeURIComponent).join('/') + '/';
+        for (const img of target.querySelectorAll('img')) {
+          const at = img.getAttribute('src') || '';
+          if (!/^([a-z][\w+.-]*:|\/|#)/i.test(at)) img.src = new URL(at, base).href;
+        }
+      }
       if (window.renderMathInElement) {
         try {
           renderMathInElement(target, {
@@ -3441,6 +3745,7 @@
         });
         $('#pageinfo').textContent = '';
         const source = focusedPane.src, rendered = focusedPane.rendered;
+        focusedPane.note.dataset.doc = tab.path || '';
         source.value = tab.text || ''; source._snippetStops = null;
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
@@ -3577,6 +3882,7 @@
         for (const child of pane.pages.children) child.hidden = child.dataset.tab !== String(tab.id);
       } else {
         setMode('note', pane);
+        pane.note.dataset.doc = tab.path || '';
         pane.src.value = tab.text || '';
         renderMarkdown(pane.src.value, pane.rendered);
         pane.src.hidden = true;
@@ -3740,6 +4046,7 @@
     function initNoteEditor(pane) {
       const source = pane.src, rendered = pane.rendered;
       const finish = () => {
+        if (ggbTarget && ggbTarget.source === source) return; // the picture is still coming
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
       };
@@ -4234,6 +4541,7 @@
       // document is already live. Remember who this note belongs to so a late
       // save can't write it into the newly-open document's sidecar.
       const ownerKey = State.key;
+      el.dataset.doc = State.path || '';
       const saveOwner = () => { if (State.key === ownerKey) scheduleSave(); };
 
       const head = document.createElement('div');
@@ -4262,6 +4570,7 @@
       const rendered = document.createElement('div'); rendered.className = 'note-render';
       body.append(source, rendered);
       const finish = () => {
+        if (ggbTarget && ggbTarget.source === source) return; // the picture is still coming
         note.md = source.value;
         renderMarkdown(note.md, rendered);
         source.hidden = true;
@@ -4692,6 +5001,7 @@
      *  global keys
      * ------------------------------------------------------------------ */
     window.addEventListener('keydown', e => {
+      if (ggbTarget) return; // GeoGebra has the keyboard
       if (e.target.id === 'prompt-input' || e.target.id === 'search-input') return; // handled by their own listeners
       const inEditor = e.target.tagName === 'TEXTAREA' && e.target.classList.contains('note-src') ||
         e.target.id === 'notefile-src';
