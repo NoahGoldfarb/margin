@@ -57,7 +57,8 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
-| `ggb` + `Tab` | Open GeoGebra; `Cmd+Enter` (`Ctrl+Enter`), then drag over the graph to insert that area as a picture |
+| `ggb` + `Tab` | Open GeoGebra for a graph; `Cmd+Enter` (`Ctrl+Enter`), then drag over it to insert that area as a picture |
+| `geo` + `Tab` | The same for geometry: a blank sheet without a coordinate system |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
 | `Ctrl+Shift+O` | Open a folder in the sidebar |
@@ -105,7 +106,11 @@ Three more things happen automatically inside math:
 
 Type `ggb` on its own line and press Tab. GeoGebra opens over the note with
 just the graph, an input line and a few tools; the cursor is already in the
-input line, so type `f(x)=x^2` and Enter. Press `Cmd+Enter` (or click
+input line, so type `f(x)=x^2` and Enter. `geo` + Tab opens it for geometry
+instead: no axes, no grid, and tools for constructions — midpoint,
+parallels and perpendiculars, bisectors, circles and arcs, regular polygons,
+angles, reflections. The **Graph** / **Geometry** switch at the top changes
+mode at any time; each mode keeps its own construction. Press `Cmd+Enter` (or click
 **Insert area**) and drag over the part you want — a click takes the whole
 graph. That area is saved as a picture next to the document (`lecture.pdf` →
 `lecture.assets/ggb-….png`) and linked into the note at the size you dragged,

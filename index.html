@@ -614,6 +614,31 @@
       color: var(--chrome-strong)
     }
 
+    #ggb-modes {
+      display: inline-flex;
+      margin-right: 6px;
+    }
+
+    #ggb-modal #ggb-modes button {
+      border-radius: 0;
+      padding: 5px 11px;
+    }
+
+    #ggb-modal #ggb-modes button:first-child {
+      border-radius: 4px 0 0 4px
+    }
+
+    #ggb-modal #ggb-modes button:last-child {
+      border-radius: 0 4px 4px 0;
+      border-left: 0
+    }
+
+    #ggb-modal #ggb-modes button.active {
+      background: var(--pen-soft);
+      border-color: var(--pen);
+      color: var(--chrome-strong)
+    }
+
     #ggb-modal .ggb-bar button.primary {
       background: var(--pen);
       border-color: var(--pen);
@@ -1906,8 +1931,8 @@
         <dd>Expand a snippet, jump to the next <code>$0</code> slot, or step out of <code>}</code></dd>
         <dt>tbl + Tab</dt>
         <dd>Insert a table (<code>tbl4x5</code> for 4 columns × 5 rows); Tab / Shift+Tab move between cells, Enter adds a row</dd>
-        <dt>ggb + Tab</dt>
-        <dd>Open GeoGebra; <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
+        <dt>ggb / geo + Tab</dt>
+        <dd>Open GeoGebra for a graph (<code>ggb</code>) or geometry without axes (<code>geo</code>); <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
           Drag a picture's corner dot to resize it</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
@@ -2038,6 +2063,7 @@
 
   <div id="ggb-modal" class="hidden">
     <div class="ggb-bar">
+      <span id="ggb-modes"><button data-mode="graph">Graph</button><button data-mode="geometry">Geometry</button></span>
       <span id="ggb-hint"></span>
       <span class="grow"></span>
       <button id="ggb-cancel">Cancel</button>
@@ -2685,8 +2711,18 @@
      *  construction. Pictures go next to the document: lecture.assets/…png
      * ------------------------------------------------------------------ */
     const GGB_DEPLOY = ['vendor/geogebra/deployggb.js', 'https://www.geogebra.org/apps/deployggb.js'];
-    // move | point | segment line | circle | polygon | intersect | text
-    const GGB_TOOLS = '0 | 1 | 15 2 | 10 34 | 16 | 5 | 17';
+    // Two modes, each with its own construction: "ggb" opens Graph (axes and
+    // grid), "geo" opens Geometry (a blank sheet and construction tools)
+    const GGB_MODES = {
+      // move | point | segment line | circle | polygon | intersect | text
+      graph: { tools: '0 | 1 | 15 2 | 10 34 | 16 | 5 | 17', axes: true },
+      // move | point midpoint intersect | segment line parallel perpendicular
+      // bisectors | circles arc | polygons | angle | reflect | text
+      geometry: { tools: '0 | 1 19 5 | 15 2 3 4 8 9 | 10 34 20 | 16 51 | 36 | 30 | 17', axes: false }
+    };
+    const GGB_TRIGGERS = { ggb: 'graph', geo: 'geometry' };
+    let ggbMode = null, ggbShown = 'graph'; // the mode applied / the one the bar shows
+    const ggbSaved = {}; // mode -> construction XML while the other mode is showing
     let ggbApi = null, ggbLoading = null;
     let ggbTarget = null; // { source, pos } — the note waiting for the picture
 
@@ -2694,11 +2730,12 @@
       const value = source.value, pos = source.selectionStart;
       if (pos !== source.selectionEnd) return false;
       const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
-      if (!/^\s*ggb$/.test(value.slice(lineStart, pos)) || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
+      const m = /^\s*(ggb|geo)$/.exec(value.slice(lineStart, pos));
+      if (!m || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
       if (isMathMode(value.slice(0, pos)) || inCodeFence(value.slice(0, pos))) return false;
       source.setRangeText('', lineStart, pos, 'end');
       source.dispatchEvent(new Event('input', { bubbles: true }));
-      openGeoGebra(source);
+      openGeoGebra(source, GGB_TRIGGERS[m[1]]);
       return true;
     }
 
@@ -2715,7 +2752,7 @@
             // classic with only the graphics view: the graph, one input line
             // and a handful of tools — not the full graphing app's side panels
             appName: 'classic', perspective: 'G', width: box.clientWidth, height: box.clientHeight,
-            showToolBar: true, customToolBar: GGB_TOOLS, showToolBarHelp: false,
+            showToolBar: true, customToolBar: GGB_MODES.graph.tools, showToolBarHelp: false,
             showAlgebraInput: true, algebraInputPosition: 'top', showMenuBar: false, showZoomButtons: true,
             enableShiftDragZoom: true, enableRightClick: true, showResetIcon: false,
             showKeyboardOnFocus: false, // a laptop has a real one, and it ate a third of the graph
@@ -2734,19 +2771,21 @@
     }
     window.addEventListener('resize', () => { if (ggbTarget) fitGeoGebra(); });
 
-    const GGB_HINT = 'Type e.g. <b>f(x)=x^2</b> and Enter · <kbd>' + (isMac ? '⌘' : 'Ctrl') +
-      '+Enter</kbd> to pick the area for the note · <kbd>Esc</kbd> back';
+    const ggbHint = () => (ggbShown === 'geometry' ? 'Pick a tool and draw' : 'Type e.g. <b>f(x)=x^2</b> and Enter') +
+      ' · <kbd>' + (isMac ? '⌘' : 'Ctrl') + '+Enter</kbd> to pick the area for the note · <kbd>Esc</kbd> back';
     const GGB_SELECT_HINT = 'Drag over the area · <kbd>Enter</kbd> or a click for the whole graph · <kbd>Esc</kbd> back';
 
-    async function openGeoGebra(source) {
+    async function openGeoGebra(source, mode) {
       ggbTarget = { source, pos: source.selectionStart };
+      paintGgbMode(mode);
       $('#ggb-modal').classList.remove('hidden');
-      $('#ggb-hint').innerHTML = ggbApi ? GGB_HINT : 'Loading GeoGebra…';
+      $('#ggb-hint').innerHTML = ggbApi ? ggbHint() : 'Loading GeoGebra…';
       try {
         await loadGeoGebra();
         if (!ggbTarget) return; // cancelled while it loaded
         fitGeoGebra();
-        $('#ggb-hint').innerHTML = GGB_HINT;
+        setGgbMode(mode);
+        $('#ggb-hint').innerHTML = ggbHint();
         // straight into the input line — otherwise the keys keep going into
         // the note behind the window
         const input = $('#ggb-applet input.TextField');
@@ -2755,6 +2794,31 @@
         closeGeoGebra();
         toast('GeoGebra could not load — it needs internet, or run "npm run vendor -- --geogebra" once');
       }
+    }
+
+    function setGgbMode(mode) {
+      paintGgbMode(mode);
+      if (!ggbApi || mode === ggbMode) return;
+      if (ggbMode) ggbSaved[ggbMode] = ggbApi.getXML();
+      const m = GGB_MODES[mode];
+      if (ggbSaved[mode]) ggbApi.setXML(ggbSaved[mode]);
+      else {
+        if (ggbMode) ggbApi.newConstruction();
+        ggbApi.setAxesVisible(m.axes, m.axes);
+        ggbApi.setGridVisible(m.axes);
+      }
+      ggbApi.setCustomToolBar(m.tools);
+      ggbApi.setMode(0); // the Move tool, not whatever was picked in the other mode
+      ggbMode = mode;
+      const input = $('#ggb-applet input.TextField');
+      if (input) input.focus();
+    }
+
+    function paintGgbMode(mode) {
+      ggbShown = mode;
+      if (ggbApi && $('#ggb-select').classList.contains('hidden')) $('#ggb-hint').innerHTML = ggbHint();
+      for (const b of document.querySelectorAll('#ggb-modes button'))
+        b.classList.toggle('active', b.dataset.mode === mode);
     }
 
     function closeGeoGebra() {
@@ -2768,7 +2832,7 @@
     function ggbSelecting(on) {
       $('#ggb-select').classList.toggle('hidden', !on);
       $('#ggb-select .rect').classList.add('hidden');
-      if (ggbTarget) $('#ggb-hint').innerHTML = on ? GGB_SELECT_HINT : GGB_HINT;
+      if (ggbTarget) $('#ggb-hint').innerHTML = on ? GGB_SELECT_HINT : ggbHint();
     }
 
     // The graphics view on screen: the canvas the size GeoGebra reports for it
@@ -2835,6 +2899,7 @@
     }
 
     $('#ggb-cancel').onclick = () => closeGeoGebra();
+    for (const b of document.querySelectorAll('#ggb-modes button')) b.onclick = () => setGgbMode(b.dataset.mode);
     $('#ggb-capture').onclick = () => { if (ggbApi) ggbSelecting(true); };
     (() => {
       const layer = $('#ggb-select'), rect = layer.querySelector('.rect');
