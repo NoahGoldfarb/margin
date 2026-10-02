@@ -2549,14 +2549,18 @@
       return false;
     }
 
+    // Is the end of `value` (the text before the caret) inside math? Uses the
+    // same rules as renderMarkdown: code is never math, finished spans are
+    // closed, and an inline $ cannot cross a line — so a stray "5$" or a
+    // `$HOME` in code no longer flips every line below it into math.
     function isMathMode(value) {
-      let dollars = 0;
-      for (let i = 0; i < value.length; i++) {
-        if (value[i] === '$' && value[i - 1] !== '\\') dollars++;
-      }
-      const inlineOpen = value.lastIndexOf('\\(') > value.lastIndexOf('\\)');
-      const displayOpen = value.lastIndexOf('\\[') > value.lastIndexOf('\\]');
-      return dollars % 2 === 1 || inlineOpen || displayOpen;
+      if ((value.match(/```/g) || []).length % 2) return false; // inside a code fence
+      const blank = m => m.replace(/[^\n]+/g, ' ');
+      let s = value.replace(CODE_RE, blank);
+      if (/`[^`\n]*$/.test(s)) return false;                    // inside inline code
+      s = s.replace(MATH_RE, blank);
+      return /\$\$(?:(?!\$\$)[\s\S])*$/.test(s) || /\\\[(?:(?!\\\])[\s\S])*$/.test(s) ||
+        /\\\((?:(?!\\\))[\s\S])*$/.test(s) || /(^|[^\\$])\$(?!\s)(?:\\.|[^$\\\n])*$/.test(s);
     }
 
     function escapeRegExp(value) {
