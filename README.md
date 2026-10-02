@@ -103,13 +103,22 @@ Three more things happen automatically inside math:
 
 ### Graphs with GeoGebra
 
-Type `ggb` on its own line and press Tab. GeoGebra opens over the note; draw
-or type your graph, press `Cmd+Enter` (or click **Insert area**) and drag over
-the part you want — a click without dragging takes the whole graph. That area
-is saved as a picture next to the document (`lecture.pdf` →
-`lecture.assets/ggb-….png`) and linked into the note. It is a picture, not a
-live graph. GeoGebra keeps your construction until you quit, so the next
-`ggb` picks up where you left off. `Esc` goes back to the note.
+Type `ggb` on its own line and press Tab. GeoGebra opens over the note with
+just the graph, an input line and a few tools; the cursor is already in the
+input line, so type `f(x)=x^2` and Enter. Press `Cmd+Enter` (or click
+**Insert area**) and drag over the part you want — a click takes the whole
+graph. That area is saved as a picture next to the document (`lecture.pdf` →
+`lecture.assets/ggb-….png`) and linked into the note at the size you dragged,
+at most 400 px wide. It is a picture, not a live graph. GeoGebra keeps your
+construction until you quit, so the next `ggb` picks up where you left off.
+`Esc` goes back to the note.
+
+### Picture size
+
+Hover over a picture in a rendered note and drag the dot at its bottom-right
+corner to resize it. The width is kept in the Markdown, Obsidian-style:
+`![GeoGebra|300](…)` shows the picture 300 px wide. Without `|width` a picture
+is shown at its own size, never wider than the note.
 
 ## Tables
 

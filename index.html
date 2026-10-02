@@ -598,7 +598,7 @@
       color: var(--chrome-strong);
     }
 
-    #ggb-modal button {
+    #ggb-modal .ggb-bar button {
       border: 1px solid var(--rule);
       border-radius: 4px;
       padding: 6px 12px;
@@ -609,12 +609,12 @@
       transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
     }
 
-    #ggb-modal button:hover {
+    #ggb-modal .ggb-bar button:hover {
       border-color: var(--rule-strong);
       color: var(--chrome-strong)
     }
 
-    #ggb-modal button.primary {
+    #ggb-modal .ggb-bar button.primary {
       background: var(--pen);
       border-color: var(--pen);
       color: #fff
@@ -657,6 +657,44 @@
     .note-render img {
       max-width: 100%;
       border-radius: 4px;
+    }
+
+    /* drag the corner dot to resize; the width goes back into ![alt|width](…) */
+    .note-render .img-wrap {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      vertical-align: top;
+      line-height: 0;
+    }
+
+    .note-render .img-wrap img {
+      display: block;
+      height: auto;
+    }
+
+    .note-render .img-handle {
+      position: absolute;
+      right: -5px;
+      bottom: -5px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--pen);
+      border: 2px solid var(--note);
+      cursor: nwse-resize;
+      opacity: 0;
+      transition: opacity var(--fast) var(--ease);
+    }
+
+    .note-render .img-wrap:hover .img-handle,
+    body.resizing-image .img-handle {
+      opacity: 1
+    }
+
+    body.resizing-image {
+      cursor: nwse-resize;
+      user-select: none;
     }
 
     /* ---------- settings ---------- */
@@ -1869,7 +1907,8 @@
         <dt>tbl + Tab</dt>
         <dd>Insert a table (<code>tbl4x5</code> for 4 columns × 5 rows); Tab / Shift+Tab move between cells, Enter adds a row</dd>
         <dt>ggb + Tab</dt>
-        <dd>Open GeoGebra; <code>⌘+Enter</code> and drag over the graph to insert that area as a picture</dd>
+        <dd>Open GeoGebra; <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
+          Drag a picture's corner dot to resize it</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
@@ -2646,6 +2685,8 @@
      *  construction. Pictures go next to the document: lecture.assets/…png
      * ------------------------------------------------------------------ */
     const GGB_DEPLOY = ['vendor/geogebra/deployggb.js', 'https://www.geogebra.org/apps/deployggb.js'];
+    // move | point | segment line | circle | polygon | intersect | text
+    const GGB_TOOLS = '0 | 1 | 15 2 | 10 34 | 16 | 5 | 17';
     let ggbApi = null, ggbLoading = null;
     let ggbTarget = null; // { source, pos } — the note waiting for the picture
 
@@ -2671,8 +2712,11 @@
         ggbApi = await new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error('timed out')), 30000);
           const applet = new GGBApplet({
-            appName: 'graphing', width: box.clientWidth, height: box.clientHeight,
-            showToolBar: true, showAlgebraInput: true, showMenuBar: false,
+            // classic with only the graphics view: the graph, one input line
+            // and a handful of tools — not the full graphing app's side panels
+            appName: 'classic', perspective: 'G', width: box.clientWidth, height: box.clientHeight,
+            showToolBar: true, customToolBar: GGB_TOOLS, showToolBarHelp: false,
+            showAlgebraInput: true, algebraInputPosition: 'top', showMenuBar: false, showZoomButtons: true,
             enableShiftDragZoom: true, enableRightClick: true, showResetIcon: false,
             showKeyboardOnFocus: false, // a laptop has a real one, and it ate a third of the graph
             appletOnLoad: api => { clearTimeout(timer); resolve(api); }
@@ -2690,9 +2734,9 @@
     }
     window.addEventListener('resize', () => { if (ggbTarget) fitGeoGebra(); });
 
-    const GGB_HINT = 'Draw your graph, then <kbd>' + (isMac ? '⌘' : 'Ctrl') +
-      '+Enter</kbd> or <b>Insert area</b> and drag over the part you want';
-    const GGB_SELECT_HINT = 'Drag over the area to insert · <kbd>Enter</kbd> for the whole graph · <kbd>Esc</kbd> to go back';
+    const GGB_HINT = 'Type e.g. <b>f(x)=x^2</b> and Enter · <kbd>' + (isMac ? '⌘' : 'Ctrl') +
+      '+Enter</kbd> to pick the area for the note · <kbd>Esc</kbd> back';
+    const GGB_SELECT_HINT = 'Drag over the area · <kbd>Enter</kbd> or a click for the whole graph · <kbd>Esc</kbd> back';
 
     async function openGeoGebra(source) {
       ggbTarget = { source, pos: source.selectionStart };
@@ -2703,6 +2747,10 @@
         if (!ggbTarget) return; // cancelled while it loaded
         fitGeoGebra();
         $('#ggb-hint').innerHTML = GGB_HINT;
+        // straight into the input line — otherwise the keys keep going into
+        // the note behind the window
+        const input = $('#ggb-applet input.TextField');
+        if (input) input.focus(); else source.blur();
       } catch (e) {
         closeGeoGebra();
         toast('GeoGebra could not load — it needs internet, or run "npm run vendor -- --geogebra" once');
@@ -2734,7 +2782,7 @@
 
     // Cut `area` (viewport pixels, null = all of it) out of the graphics
     // view, rendered by GeoGebra itself at twice the size so it stays sharp
-    // and none of the tool UI ends up in the picture
+    // and none of the tool UI ends up in the picture. Null when it misses.
     async function ggbSnapshot(area) {
       const view = ggbGraphicsRect();
       if (!view) throw new Error('no graphics view');
@@ -2751,19 +2799,20 @@
       canvas.width = Math.round((right - left) * fx); canvas.height = Math.round((bottom - top) * fy);
       canvas.getContext('2d').drawImage(img, (left - view.left) * fx, (top - view.top) * fy,
         canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/png');
+      // the picture is twice the size it had on screen; `width` is that size
+      return { url: canvas.toDataURL('image/png'), width: Math.round(right - left) };
     }
 
     async function ggbInsert(area) {
       const t = ggbTarget;
       if (!t || !ggbApi) return;
-      let dataUrl;
-      try { dataUrl = await ggbSnapshot(area); }
+      let shot;
+      try { shot = await ggbSnapshot(area); }
       catch (e) { toast('Could not capture the graph: ' + e.message); return; }
-      if (!dataUrl) { toast('That area is outside the graph'); ggbSelecting(true); return; }
+      if (!shot) { toast('That area is outside the graph'); ggbSelecting(true); return; }
 
       // next to the document when there is one on disk; inline otherwise
-      let link = dataUrl;
+      let link = shot.url;
       const doc = docOf(t.source);
       if (hasShell && doc) {
         const stem = doc.replace(/\.[^./]+$/, '');
@@ -2771,14 +2820,14 @@
         const name = `ggb-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-` +
           `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
         const folder = stem.split('/').pop() + '.assets';
-        const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), c => c.charCodeAt(0));
+        const bytes = Uint8Array.from(atob(shot.url.split(',')[1]), c => c.charCodeAt(0));
         try { await window.margin.writeBinary(dirOf(stem) + '/' + folder + '/' + name, bytes); }
         catch (e) { toast('Could not save the picture: ' + e.message); return; }
         link = encodeURIComponent(folder) + '/' + name;
       }
       const { source, pos } = t;
       const after = source.value.slice(pos);
-      const text = `![GeoGebra](${link})` + (after && !after.startsWith('\n') ? '\n' : '');
+      const text = `![GeoGebra|${Math.min(400, shot.width)}](${link})` + (after && !after.startsWith('\n') ? '\n' : '');
       source.setRangeText(text, pos, pos, 'end');
       source.setSelectionRange(pos + text.length, pos + text.length);
       source.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3217,13 +3266,18 @@
           target.append(block.content);
         }
       } else target.innerHTML = unmath(escapeHtml(s));
+      // relative pictures resolve against the document, not against index.html
       const doc = docOf(target);
-      if (doc) {
-        const base = 'file://' + dirOf(doc).split('/').map(encodeURIComponent).join('/') + '/';
-        for (const img of target.querySelectorAll('img')) {
-          const at = img.getAttribute('src') || '';
-          if (!/^([a-z][\w+.-]*:|\/|#)/i.test(at)) img.src = new URL(at, base).href;
-        }
+      const base = doc && 'file://' + dirOf(doc).split('/').map(encodeURIComponent).join('/') + '/';
+      for (const img of target.querySelectorAll('img')) {
+        const at = img.getAttribute('src') || '';
+        if (base && !/^([a-z][\w+.-]*:|\/|#)/i.test(at)) img.src = new URL(at, base).href;
+        const sized = /^(.*?)\s*\|\s*(\d+)$/.exec(img.alt); // ![alt|300](…), as in Obsidian
+        if (sized) { img.alt = sized[1]; img.style.width = sized[2] + 'px'; }
+        const wrap = document.createElement('span'); wrap.className = 'img-wrap';
+        const handle = document.createElement('span'); handle.className = 'img-handle';
+        handle.title = 'Drag to resize';
+        img.replaceWith(wrap); wrap.append(img, handle);
       }
       if (window.renderMathInElement) {
         try {
@@ -3353,6 +3407,55 @@
         if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) { p.scrollTop += dy; return; }
       }
       window.scrollBy(0, dy);
+    }
+
+    // Drag an image's corner dot in a rendered note to resize it. The width is
+    // written back into the Markdown as ![alt|width](…) and saved like a edit.
+    (() => {
+      let drag = null, swallowClick = false;
+      document.addEventListener('mousedown', e => {
+        const handle = e.button === 0 && e.target.closest('.note-render .img-handle');
+        if (!handle) return;
+        e.preventDefault();
+        const img = handle.parentElement.querySelector('img');
+        drag = { img, x: e.clientX, from: img.getBoundingClientRect().width, max: img.closest('.note-render').clientWidth };
+        document.body.classList.add('resizing-image');
+      }, true);
+      window.addEventListener('mousemove', e => {
+        if (!drag) return;
+        drag.width = Math.round(Math.max(40, Math.min(drag.max, drag.from + e.clientX - drag.x)));
+        drag.img.style.width = drag.width + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!drag) return;
+        const { img, width } = drag;
+        drag = null;
+        document.body.classList.remove('resizing-image');
+        // the click that ends the drag must not open the editor
+        swallowClick = true; setTimeout(() => { swallowClick = false; });
+        if (width) setImageWidth(img, width);
+      });
+      window.addEventListener('click', e => {
+        if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); }
+      }, true);
+    })();
+
+    function setImageWidth(img, width) {
+      const rendered = img.closest('.note-render'), block = img.closest('[data-src]');
+      const source = rendered && rendered.parentElement.querySelector('textarea');
+      if (!source || !block) return;
+      // the k-th picture of the block is the k-th ![…]( in its source
+      const [start, end] = block.dataset.src.split(':').map(Number);
+      const k = [...block.querySelectorAll('img')].indexOf(img);
+      const text = source.value.slice(start, end).replace(CODE_RE, m => m.replace(/[^\n]/g, ' '));
+      const re = /!\[([^\]\n]*)\]\(/g;
+      let m;
+      for (let n = 0; (m = re.exec(text)) && n < k; n++);
+      if (!m) return;
+      const from = start + m.index + 2;
+      source.setRangeText(m[1].replace(/\s*\|\s*\d+$/, '') + '|' + width, from, from + m[1].length);
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      renderMarkdown(source.value, rendered);
     }
 
     // Open `source` for editing with the caret at the clicked spot of its
