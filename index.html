@@ -1359,7 +1359,13 @@
     }
 
     .note-render table {
-      border-collapse: collapse
+      border-collapse: collapse;
+      margin: .4em 0
+    }
+
+    .note-render th {
+      font-weight: 600;
+      text-align: left
     }
 
     .note-render td,
@@ -1762,6 +1768,8 @@
         <dd>Highlight that spot on the page; click a highlight to remove it</dd>
         <dt>Tab</dt>
         <dd>Expand a snippet, jump to the next <code>$0</code> slot, or step out of <code>}</code></dd>
+        <dt>tbl + Tab</dt>
+        <dd>Insert a table (<code>tbl4x5</code> for 4 columns × 5 rows); Tab / Shift+Tab move between cells, Enter adds a row</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
@@ -2375,11 +2383,160 @@
       return true;
     }
 
+    /* ------------------------------------------------------------------ *
+     *  Markdown tables — "tbl" + Tab drops one in, Tab / Shift+Tab walk the
+     *  cells, Enter adds a row. Every step re-aligns the columns.
+     * ------------------------------------------------------------------ */
+    const isTableLine = line => /^\s*\|/.test(line);
+    const isDelimiterRow = cells => cells.every(c => /^:?-+:?$/.test(c));
+
+    // pipes that separate cells — not escaped, and not inside $math$ or `code`,
+    // which renderMarkdown hides from marked, so "$|x|$" stays one cell
+    function pipePositions(line) {
+      const at = [];
+      let math = false, code = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '\\') { i++; continue; }
+        if (ch === '`' && !math) code = !code;
+        else if (ch === '$' && !code) math = !math;
+        else if (ch === '|' && !math && !code) at.push(i);
+      }
+      return at;
+    }
+
+    function tableCells(line) {
+      const pipes = pipePositions(line);
+      const cells = pipes.map((p, k) => line.slice(p + 1, pipes[k + 1] ?? line.length).trim());
+      if (cells.length > 1 && cells[cells.length - 1] === '') cells.pop(); // the closing "|"
+      return cells;
+    }
+
+    function inCodeFence(text) {
+      return (text.match(/^\s*```/gm) || []).length % 2 === 1;
+    }
+
+    // The table around the caret, as rows of cells, plus which cell the caret is in.
+    function tableContext(source) {
+      const value = source.value, pos = source.selectionStart;
+      const prefix = value.slice(0, pos);
+      if (isMathMode(prefix) || inCodeFence(prefix)) return null;
+      const lines = value.split('\n');
+      const lineNo = prefix.split('\n').length - 1;
+      if (!isTableLine(lines[lineNo])) return null;
+      let first = lineNo, last = lineNo;
+      while (first > 0 && isTableLine(lines[first - 1])) first--;
+      while (last < lines.length - 1 && isTableLine(lines[last + 1])) last++;
+      const start = first ? lines.slice(0, first).join('\n').length + 1 : 0;
+      const end = start + lines.slice(first, last + 1).join('\n').length;
+      const rows = lines.slice(first, last + 1).map(tableCells);
+      const inLine = pos - (prefix.lastIndexOf('\n') + 1);
+      let row = lineNo - first;
+      let col = Math.max(0, pipePositions(lines[lineNo]).filter(p => p < inLine).length - 1);
+      // "| Name | Age |" on its own is a header still waiting for its --- row
+      if (rows.length < 2 || !isDelimiterRow(rows[1])) {
+        rows.splice(1, 0, rows[0].map(() => '---'));
+        if (row >= 1) row++;
+      }
+      const cols = Math.max(...rows.map(r => r.length));
+      for (const r of rows) while (r.length < cols) r.push(r === rows[1] ? '---' : '');
+      return { start, end, rows, row, col: Math.min(col, cols - 1), cols };
+    }
+
+    function layoutTable(rows) {
+      const cols = rows[0].length;
+      const width = [];
+      for (let c = 0; c < cols; c++) {
+        width.push(Math.max(3, ...rows.map((r, i) => i === 1 ? 3 : r[c].length)));
+      }
+      const lines = rows.map((r, i) => '| ' + r.map((cell, c) => {
+        if (i !== 1) return cell.padEnd(width[c]);
+        const left = cell.startsWith(':'), right = cell.length > 1 && cell.endsWith(':');
+        return (left ? ':' : '') + '-'.repeat(width[c] - left - right) + (right ? ':' : '');
+      }).join(' | ') + ' |');
+      const starts = [];
+      for (let c = 0, at = 2; c < cols; at += width[c] + 3, c++) starts.push(at);
+      return { lines, starts };
+    }
+
+    // re-align the table and select the contents of cell (row, col)
+    function writeTable(source, t, row, col) {
+      const { lines, starts } = layoutTable(t.rows);
+      source.setRangeText(lines.join('\n'), t.start, t.end, 'end');
+      let from = t.start + starts[col];
+      for (let r = 0; r < row; r++) from += lines[r].length + 1;
+      source.setSelectionRange(from, from + t.rows[row][col].length);
+      source._snippetStops = null;
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      autoGrow(source);
+    }
+
+    // "tbl" gives 3 columns × 2 rows; "tbl4x5" gives 4 columns × 5 rows
+    function expandTable(source) {
+      const value = source.value, pos = source.selectionStart;
+      if (pos !== source.selectionEnd) return false;
+      const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+      const m = /^\s*tbl(?:(\d{1,2})(?:x(\d{1,2}))?)?$/.exec(value.slice(lineStart, pos));
+      if (!m || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
+      if (isMathMode(value.slice(0, pos)) || inCodeFence(value.slice(0, pos))) return false;
+      const cols = Math.min(20, +m[1] || 3), body = Math.min(50, +m[2] || 2);
+      const blank = () => Array(cols).fill('');
+      const rows = [blank(), Array(cols).fill('---'), ...Array.from({ length: body }, blank)];
+      writeTable(source, { start: lineStart, end: pos, rows }, 0, 0);
+      return true;
+    }
+
+    // Tab moves to the next cell (a new row past the last one), Shift+Tab back
+    function tableTab(source, back) {
+      const t = tableContext(source);
+      if (!t) return false;
+      let { row, col } = t;
+      if (row === 1) col = back ? 0 : t.cols - 1; // standing on the --- row
+      if (back) {
+        if (--col < 0) {
+          row = row === 2 ? 0 : row - 1;
+          col = row < 0 ? 0 : t.cols - 1;
+          row = Math.max(0, row);
+        }
+      } else if (++col >= t.cols) {
+        col = 0;
+        row = row === 0 ? 2 : row + 1;
+        if (row >= t.rows.length) t.rows.push(Array(t.cols).fill(''));
+      }
+      writeTable(source, t, row, col);
+      return true;
+    }
+
+    // Enter adds a row below; Enter on an empty last row leaves the table
+    function tableEnter(source) {
+      const t = tableContext(source);
+      if (!t) return false;
+      if (t.row >= 2 && t.row === t.rows.length - 1 && t.rows[t.row].every(c => !c)) {
+        t.rows.pop();
+        const text = layoutTable(t.rows).lines.join('\n') + '\n';
+        source.setRangeText(text, t.start, t.end, 'end');
+        source._snippetStops = null;
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+        autoGrow(source);
+        return true;
+      }
+      const at = t.row < 2 ? 2 : t.row + 1;
+      t.rows.splice(at, 0, Array(t.cols).fill(''));
+      writeTable(source, t, at, 0);
+      return true;
+    }
+
     // Shared by both note editors. Returns true when the key was consumed.
     function handleMathKey(source, e) {
+      if (e.isComposing) return false;
+      if (e.key === 'Tab' && e.shiftKey && tableTab(source, true)) { e.preventDefault(); return true; }
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && tableEnter(source)) {
+        e.preventDefault(); return true;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (moveSnippetTab(source) || expandSnippet(source, false) || tabOut(source)) return true;
+        if (moveSnippetTab(source) || expandTable(source) || expandSnippet(source, false) ||
+          tableTab(source, false) || tabOut(source)) return true;
         source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
         source.dispatchEvent(new Event('input', { bubbles: true }));
         return true;

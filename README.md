@@ -54,6 +54,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+\` / `Ctrl+\` | Split the view in two |
 | `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
+| `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
 | `Ctrl+Shift+O` | Open a folder in the sidebar |
@@ -96,6 +97,22 @@ Three more things happen automatically inside math:
   type straight through a nested expression without reaching for the arrow keys.
 - Brackets pair themselves, typing the closing one steps over it, and
   backspace between an empty pair removes both halves.
+
+## Tables
+
+Type `tbl` on an empty line and press Tab for a table with 3 columns and 2
+rows, or `tbl4x5` for 4 columns and 5 rows. The caret lands in the first
+header cell. Inside any table:
+
+- `Tab` moves to the next cell, and past the last cell it adds a new row.
+  `Shift+Tab` goes back one cell.
+- `Enter` adds an empty row below and jumps into it. `Enter` on an empty last
+  row removes it and leaves the table. `Shift+Enter` is a plain line break.
+- Every step re-aligns the columns, so the source stays readable.
+
+You can also just type a header line like `| Name | Value |` and press Enter
+— the `---` row is added for you. Math works in cells, and `$|x|$` does not
+split a cell.
 
 ## Recording the lecture
 
