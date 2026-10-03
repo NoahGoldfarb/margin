@@ -1,0 +1,98 @@
+% Lecture notes the way Gilles Castel set them up (castel.dev/post/lecture-notes-3):
+% boxed definitions and theorems, \lecture{n}{date}{title} with the date in
+% the margin and the lecture title in the running header.
+\documentclass[a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{emptypage}
+\usepackage{subcaption}
+\usepackage{multicol}
+\usepackage{xcolor}
+
+% math
+\usepackage{amsmath, amsfonts, mathtools, amsthm, amssymb}
+\usepackage{mathrsfs}
+\usepackage{cancel}
+\usepackage{bm}
+\newcommand\N{\ensuremath{\mathbb{N}}}
+\newcommand\R{\ensuremath{\mathbb{R}}}
+\newcommand\Z{\ensuremath{\mathbb{Z}}}
+\renewcommand\O{\ensuremath{\emptyset}}
+\newcommand\Q{\ensuremath{\mathbb{Q}}}
+\newcommand\C{\ensuremath{\mathbb{C}}}
+\let\svlim\lim\def\lim{\svlim\limits}
+\let\implies\Rightarrow
+\let\impliedby\Leftarrow
+\let\iff\Leftrightarrow
+\let\epsilon\varepsilon
+\usepackage{stmaryrd}
+\newcommand\contra{\scalebox{1.5}{$\lightning$}}
+
+% boxed definitions and theorems
+\usepackage{mdframed}
+\mdfsetup{skipabove=1em,skipbelow=0em}
+\theoremstyle{definition}
+\newmdtheoremenv[nobreak=true]{definition}{Definition}
+\newmdtheoremenv[nobreak=true]{prop}{Proposition}
+\newmdtheoremenv[nobreak=true]{theorem}{Theorem}
+\newmdtheoremenv[nobreak=true]{corollary}{Corollary}
+\newmdtheoremenv[nobreak=true]{lemma}{Lemma}
+\newtheorem*{eg}{Example}
+\newtheorem*{notation}{Notation}
+\newtheorem*{remark}{Remark}
+\newtheorem*{note}{Note}
+\newtheorem*{problem}{Problem}
+\newtheorem*{observe}{Observe}
+\newtheorem*{property}{Property}
+\newtheorem*{intuition}{Intuition}
+\usepackage{etoolbox}
+\AtEndEnvironment{eg}{\null\hfill$\diamond$}%
+\makeatletter
+\def\thm@space@setup{\thm@preskip=\parskip \thm@postskip=0pt}
+
+% \lecture{1}{date}{title}: heading, date in the margin, title in the header
+\usepackage{xifthen}
+\def\@lecture{}%
+\newcommand{\lecture}[3]{
+    \ifthenelse{\isempty{#3}}{\def\@lecture{Lecture #1}}{\def\@lecture{Lecture #1: #3}}%
+    \subsection*{\@lecture}
+    \marginpar{\small\textsf{\mbox{#2}}}
+}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead[RO,LE]{\@lecture}
+\fancyhead[RE,LO]{}
+\fancyfoot[RO,LE]{\thepage}
+\fancyfoot[RE,LO]{}
+\fancyfoot[C]{\leftmark}
+\makeatother
+
+% figures (pdf + pdf_tex from Inkscape)
+\usepackage{import}
+\usepackage{pdfpages}
+\usepackage{transparent}
+\newcommand{\incfig}[2][1]{%
+    \def\svgwidth{#1\columnwidth}
+    \import{./figures/}{#2.pdf_tex}
+}
+\pdfsuppresswarningpagegroup=1
+
+\title{$0}
+\author{}
+
+\begin{document}
+\maketitle
+
+\lecture{1}{{{date}}}{$1}
+
+$2
+
+\end{document}

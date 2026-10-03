@@ -20,6 +20,13 @@ contextBridge.exposeInMainWorld('margin', {
   renamePath:   (from, to)    => ipcRenderer.invoke('rename-path', from, to),
   deletePath:   (p, isDir)    => ipcRenderer.invoke('delete-path', p, isDir),
 
+  // LaTeX: compile next to the .tex, and "!name" templates
+  texInfo:       p    => ipcRenderer.invoke('tex-info', p),
+  texCompile:    p    => ipcRenderer.invoke('tex-compile', p),
+  texTemplate:   name => ipcRenderer.invoke('tex-template', name),
+  texTemplates:  ()   => ipcRenderer.invoke('tex-templates'),
+  openTemplates: ()   => ipcRenderer.invoke('open-templates'),
+
   // search
   walkDir:      root          => ipcRenderer.invoke('walk-dir', root),
 

@@ -57,6 +57,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
+| `!` + `Tab` | In a `.tex` file: insert a whole document from a template (`!castel` for another one) |
 | `ggb` + `Tab` | Open GeoGebra for a graph; `Cmd+Enter` (`Ctrl+Enter`), then drag over it to insert that area as a picture |
 | `geo` + `Tab` | The same for geometry: a blank sheet without a coordinate system |
 | `/` | In math: turn what you just typed into a fraction |
@@ -70,6 +71,32 @@ in that mode notes are kept in the browser's local storage instead of a file.
 
 Ctrl-click (Cmd-click on macOS) anywhere on a rendered PDF page to split it at
 that exact position and start a note.
+
+## LaTeX files
+
+Open a `.tex` file from the sidebar and it shows as source on the left with
+its compiled PDF on the right, the way Gilles Castel keeps Zathura next to
+Vim. Margin compiles it with `latexmk` when you open it and again every time it
+saves (a moment after you stop typing); `Esc` compiles right away. The PDF keeps
+its scroll position across rebuilds. Errors show above the PDF with their line
+number — click one to jump there.
+
+- In an empty file, `!` + Tab inserts a whole document, like `!` for HTML in
+  VS Code. `!castel` + Tab uses Castel's lecture-notes setup instead (boxed
+  theorems, `\lecture{n}{date}{title}`, `\incfig`). Templates are plain `.tex`
+  files — **LaTeX › Open templates folder** to change them or add your own;
+  `!name` + Tab picks `name.tex`. In a template, `$0`, `$1`, … are Tab stops,
+  `{{date}}` and `{{file}}` are filled in.
+- The LaTeX snippets work as in notes, and know LaTeX's math: inside
+  `align`, `equation` and friends counts as math, `%` comments do not.
+- A file without `\documentclass` (say `lec_03.tex`) compiles the `.tex` next
+  to it that `\input`s it (`master.tex`) and shows that PDF;
+  `% !TEX root = ../master.tex` names the root explicitly.
+  `% !TEX program = xelatex` (or `lualatex`) switches the engine.
+- LaTeX's build files (`.aux`, `.log`, `.synctex.gz`, …) and the `.assets`
+  folders with pictures are hidden from the sidebar.
+
+Needs a TeX installation with `latexmk` ([MacTeX](https://tug.org/mactex/)).
 
 ## Writing
 

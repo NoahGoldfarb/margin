@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+const { execFile } = require('child_process');
 
 // Notes live next to the PDF: lecture.pdf -> lecture.margin.json
 const sidecar = p => p.replace(/\.pdf$/i, '') + '.margin.json';
@@ -186,7 +187,12 @@ ipcMain.handle('open-folder', async () => {
 
 // Margin's own storage for a PDF (notes sidecar, lecture recording) sits next
 // to it on disk on purpose, but it is not a document — keep it out of the tree.
+// Same for pictures pasted into notes (lecture.assets/) and LaTeX's build files.
 const isSidecar = name => /\.margin\.(json|webm|ogg|m4a|mp3|wav)$/i.test(name);
+const isBuildFile = name =>
+  /\.(aux|log|fls|fdb_latexmk|synctex\.gz|synctex|synctex\(busy\)|out|toc|lof|lot|bbl|blg|bcf|run\.xml|nav|snm|vrb|xdv|thm)$/i.test(name);
+const isHidden = e => e.name.startsWith('.') || isSidecar(e.name) || isBuildFile(e.name) ||
+  (e.isDirectory() && /\.assets$/i.test(e.name));
 
 // null (not []) when the directory is gone or unreadable, so the caller can
 // tell "empty folder" apart from "that folder isn't there any more"
@@ -194,7 +200,7 @@ ipcMain.handle('read-dir', async (_e, dir) => {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     return entries
-      .filter(e => !e.name.startsWith('.') && !isSidecar(e.name))
+      .filter(e => !isHidden(e))
       .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
       // numeric so lecture2 sorts before lecture10, which is the whole point
       // of numbering your lectures
@@ -267,7 +273,7 @@ ipcMain.handle('delete-path', async (_e, p, isDir) => {
 
 // ---- search — recursively list every pdf/md/markdown/txt under a folder ----
 
-const SEARCHABLE_EXT = new Set(['pdf', 'md', 'markdown', 'txt']);
+const SEARCHABLE_EXT = new Set(['pdf', 'md', 'markdown', 'txt', 'tex']);
 const WALK_MAX_FILES = 4000;
 
 ipcMain.handle('walk-dir', async (_e, root) => {
@@ -279,7 +285,7 @@ ipcMain.handle('walk-dir', async (_e, root) => {
     catch { return; }
     for (const e of entries) {
       if (out.length >= WALK_MAX_FILES) return;
-      if (e.name.startsWith('.')) continue;
+      if (isHidden(e)) continue;
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         await walk(p);
@@ -294,3 +300,96 @@ ipcMain.handle('walk-dir', async (_e, root) => {
   await walk(root);
   return out;
 });
+
+// ---- LaTeX: compile with latexmk, the PDF lands next to the .tex ----
+
+// An app started from the Dock gets a bare PATH; TeX Live and Homebrew live here
+const TEX_PATH = ['/Library/TeX/texbin', '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].join(':');
+
+// Which file actually gets compiled. A "% !TEX root = master.tex" comment wins;
+// otherwise a file without \documentclass is a chapter, and its root is the
+// .tex next to it that \input's or \include's it (lec_03.tex -> master.tex).
+async function texRoot(p) {
+  let text = '';
+  try { text = await fs.readFile(p, 'utf8'); } catch { return p; }
+  const magic = /^\s*%\s*!TEX\s+root\s*=\s*(.+?)\s*$/im.exec(text);
+  if (magic) return path.resolve(path.dirname(p), magic[1]);
+  if (/\\documentclass/.test(text)) return p;
+  const stem = path.basename(p, '.tex');
+  const dir = path.dirname(p);
+  let names = [];
+  try { names = (await fs.readdir(dir)).filter(n => n.endsWith('.tex') && n !== path.basename(p)); } catch { }
+  for (const name of names) {
+    const other = await fs.readFile(path.join(dir, name), 'utf8').catch(() => '');
+    const uses = new RegExp(`\\\\(input|include)\\{(\\./)?${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\.tex)?\\}`);
+    if (/\\documentclass/.test(other) && uses.test(other)) return path.join(dir, name);
+  }
+  return p;
+}
+
+ipcMain.handle('tex-info', async (_e, p) => {
+  const root = await texRoot(p);
+  const pdf = root.replace(/\.tex$/i, '') + '.pdf';
+  const st = await fs.stat(pdf).catch(() => null);
+  return { root, pdf, mtime: st ? st.mtimeMs : 0 };
+});
+
+ipcMain.handle('tex-compile', async (_e, p) => {
+  const root = await texRoot(p);
+  const dir = path.dirname(root), file = path.basename(root);
+  const pdf = root.replace(/\.tex$/i, '') + '.pdf';
+  const head = (await fs.readFile(root, 'utf8').catch(() => '')).slice(0, 2000);
+  const program = (/^\s*%\s*!TEX\s+(?:TS-)?program\s*=\s*(\w+)/im.exec(head) || [])[1] || '';
+  const engine = /^xelatex$/i.test(program) ? '-xelatex' : /^lualatex$/i.test(program) ? '-lualatex' : '-pdf';
+  const started = Date.now();
+  const result = await new Promise(resolve => {
+    execFile('latexmk', [engine, '-interaction=nonstopmode', '-file-line-error', '-synctex=1', file],
+      { cwd: dir, env: { ...process.env, PATH: TEX_PATH }, timeout: 90000, maxBuffer: 16 * 1024 * 1024 },
+      (err, stdout, stderr) => resolve({ err, stdout, stderr }));
+  });
+  if (result.err && result.err.code === 'ENOENT')
+    return { ok: false, root, pdf, missing: true, errors: [{ line: 0, message: 'latexmk not found — install MacTeX (tug.org/mactex)' }] };
+  // file:line: message, as -file-line-error writes them
+  const log = await fs.readFile(root.replace(/\.tex$/i, '') + '.log', 'utf8').catch(() => '');
+  const errors = [];
+  for (const m of log.matchAll(/^(.*?\.tex):(\d+): (.*)$/gm)) {
+    const file = path.resolve(dir, m[1]);
+    if (!errors.some(e => e.file === file && e.line === +m[2])) errors.push({ file, line: +m[2], message: m[3] });
+    if (errors.length >= 8) break;
+  }
+  if (result.err && !errors.length) {
+    const fatal = /^! (.*)$/m.exec(log);
+    errors.push({ line: 0, message: fatal ? fatal[1] : (result.err.killed ? 'Compilation timed out' : 'Compilation failed') });
+  }
+  const st = await fs.stat(pdf).catch(() => null);
+  return { ok: !result.err && !errors.length, root, pdf, mtime: st ? st.mtimeMs : 0, errors, ms: Date.now() - started };
+});
+
+// ---- LaTeX templates: "!name" + Tab in a .tex file inserts templates/name.tex ----
+
+const templatesDir = () => path.join(app.getPath('userData'), 'templates');
+
+// first use: start the user's folder with the templates that ship with Margin
+async function ensureTemplates() {
+  const dir = templatesDir();
+  try { await fs.access(dir); return dir; } catch { }
+  await fs.mkdir(dir, { recursive: true });
+  const bundled = path.join(__dirname, 'templates');
+  for (const name of await fs.readdir(bundled).catch(() => []))
+    await fs.copyFile(path.join(bundled, name), path.join(dir, name));
+  return dir;
+}
+
+ipcMain.handle('tex-template', async (_e, name) => {
+  if (!/^[\w-]+$/.test(name)) return null;
+  const dir = await ensureTemplates();
+  return fs.readFile(path.join(dir, name + '.tex'), 'utf8').catch(() => null);
+});
+
+ipcMain.handle('tex-templates', async () => {
+  const dir = await ensureTemplates();
+  const names = (await fs.readdir(dir).catch(() => [])).filter(n => n.endsWith('.tex'));
+  return { dir, names: names.map(n => n.slice(0, -4)).sort() };
+});
+
+ipcMain.handle('open-templates', async () => shell.openPath(await ensureTemplates()));

@@ -1184,6 +1184,93 @@
       display: none
     }
 
+    /* ---------- .tex files: the source on the left, its PDF on the right ---------- */
+    .pane-surface.tex {
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .pane-note.tex {
+      height: 100%;
+      justify-content: stretch;
+    }
+
+    .pane-note.tex .notefile-page {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      height: 100%;
+      min-height: 0;
+      padding: 22px 26px;
+      box-shadow: none;
+      animation: none;
+    }
+
+    .pane-note.tex .notefile-src {
+      font-family: var(--mono);
+      font-size: calc(13.5px * var(--editor-font-scale));
+      line-height: 1.6;
+      height: 100% !important;
+      min-height: 0;
+      overflow-y: auto;
+      tab-size: 4;
+      transition: none;
+    }
+
+    .tex-preview {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 100%;
+      overflow-y: auto;
+      background: var(--ink);
+      border-left: 1px solid var(--rule);
+    }
+
+    .tex-preview[hidden] {
+      display: none
+    }
+
+    .tex-status {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--chrome-dim);
+      background: var(--ink);
+      border-bottom: 1px solid var(--rule);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tex-status.error {
+      color: #E07070;
+      cursor: pointer
+    }
+
+    .tex-pages {
+      padding: 14px 14px 40px;
+    }
+
+    .tex-page {
+      margin: 0 auto 12px;
+      background: #fff;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .35);
+    }
+
+    .tex-page canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .tex-empty {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--chrome-dim);
+    }
+
     .notefile-src::placeholder {
       color: var(--note-placeholder)
     }
@@ -1725,6 +1812,7 @@
     }
 
     .snippet-row button,
+    #templates-open,
     #snippet-add, #snippet-reset, #snippet-close {
       border: 1px solid var(--rule);
       border-radius: 4px;
@@ -1931,6 +2019,9 @@
         <dd>Expand a snippet, jump to the next <code>$0</code> slot, or step out of <code>}</code></dd>
         <dt>tbl + Tab</dt>
         <dd>Insert a table (<code>tbl4x5</code> for 4 columns × 5 rows); Tab / Shift+Tab move between cells, Enter adds a row</dd>
+        <dt>! + Tab</dt>
+        <dd>In a <code>.tex</code> file: insert a whole document from a template (<code>!castel</code> for another one).
+          The PDF compiles beside it on every save; Esc compiles right away</dd>
         <dt>ggb / geo + Tab</dt>
         <dd>Open GeoGebra for a graph (<code>ggb</code>) or geometry without axes (<code>geo</code>); <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
           Drag a picture's corner dot to resize it</dd>
@@ -2037,6 +2128,9 @@
         <code>$…$</code>, <strong>text</strong> ones only outside. Changes save automatically.</p>
       <p style="margin-top:-8px">Inside math you also get <code>/</code> for auto-fractions,
         Tab to step out of <code>}</code> and <code>$</code>, and automatic bracket pairing.</p>
+      <p id="tex-templates">In a <code>.tex</code> file, <code>!</code> + Tab inserts a whole document
+        (<code>default.tex</code>); <code>!name</code> + Tab uses another template:
+        <span id="template-names"></span>. <button id="templates-open">Open templates folder</button></p>
       <input type="text" id="snippet-filter" placeholder="Filter snippets…" spellcheck="false">
       <div class="snippet-row">
         <strong>Trigger</strong><strong>Template</strong><strong>Mode</strong><span></span>
@@ -2285,7 +2379,7 @@
     const mathSnip = (trigger, template) => ({ trigger, template, mode: 'math' });
     const DEFAULT_SNIPPETS = [
       // entering math
-      { trigger: 'mk', template: '$0$', mode: 'text' },
+      { trigger: 'mk', template: '$$0$', mode: 'text' },
       { trigger: 'dm', template: '$$\n$0\n$$', mode: 'text' },
 
       // fractions, powers, roots
@@ -2372,6 +2466,9 @@
           const result = saved.filter(x => x && x.trigger && typeof x.template === 'string');
           const frac = result.find(x => x.trigger === 'frac');
           if (frac && frac.template === '\\frac{$0}{}') frac.template = '\\frac{$0}{$1}';
+          // "$0$" read as stop 0 and one "$", so mk never opened its math
+          const mk = result.find(x => x.trigger === 'mk');
+          if (mk && mk.template === '$0$') mk.template = '$$0$';
           // an older, much smaller pack was saved before the math library existed;
           // keep whatever was customised and fold the new defaults in alongside it
           const seen = new Set(result.map(x => x.trigger));
@@ -2391,7 +2488,7 @@
       const cursorPosition = source.selectionStart;
       const prefix = value.slice(0, cursorPosition);
       const ending = typedSpace && prefix.endsWith(' ') ? prefix.slice(0, -1) : prefix;
-      const inMath = isMathMode(ending);
+      const inMath = isMathMode(ending, isTexSource(source));
       const boundary = inMath ? '(?:^|[^A-Za-z])' : '(?:^|\\s|\\d)';
       const match = snippets
         .filter(x => {
@@ -2406,18 +2503,23 @@
           return new RegExp(`${boundary}${escapeRegExp(x.trigger)}$`).test(ending);
         });
       if (!match) return false;
-      const start = ending.length - match.trigger.length;
-      const before = ending.slice(0, start);
-      const suffix = value.slice(cursorPosition);
+      insertSnippet(source, ending.length - match.trigger.length, cursorPosition, match.template);
+      return true;
+    }
+
+    // Replace from…to with `template`, whose $1, $2 … $0 become the Tab stops
+    function insertSnippet(source, from, to, template) {
+      const value = source.value;
+      const before = value.slice(0, from);
+      const suffix = value.slice(to);
       const stops = [];
-      const replacement = match.template.replace(/\$(\d+)/g, (_, number) => {
+      const replacement = template.replace(/\$(\d+)/g, (_, number) => {
         stops.push({ number: Number(number), offset: 0 });
         return '';
       });
-      let offset = 0;
-      match.template.replace(/\$(\d+)/g, (_, number, position) => {
+      template.replace(/\$(\d+)/g, (_, number, position) => {
         const stop = stops.find(item => item.number === Number(number) && item.offset === 0);
-        if (stop) stop.offset = position - [...match.template.slice(0, position).matchAll(/\$(\d+)/g)].reduce((sum, item) => sum + item[0].length, 0);
+        if (stop) stop.offset = position - [...template.slice(0, position).matchAll(/\$(\d+)/g)].reduce((sum, item) => sum + item[0].length, 0);
         return '';
       });
       stops.sort((a, b) => a.number - b.number);
@@ -2429,6 +2531,34 @@
       source._snippetValue = source.value;
       source.dispatchEvent(new Event('input', { bubbles: true }));
       autoGrow(source);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  LaTeX templates — in a .tex file, "!" + Tab drops in the whole
+     *  document skeleton, like "!" for HTML in VS Code. "!castel" + Tab
+     *  takes templates/castel.tex instead. Templates are plain .tex files in
+     *  Margin's templates folder; $1 … $0 are Tab stops, {{date}} and
+     *  {{file}} are filled in.
+     * ------------------------------------------------------------------ */
+    function expandTemplate(source) {
+      if (!hasShell || !isTexSource(source)) return false;
+      const value = source.value, pos = source.selectionStart;
+      if (pos !== source.selectionEnd) return false;
+      const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+      const trigger = value.slice(lineStart, pos);
+      const m = /^\s*!([\w-]*)$/.exec(trigger);
+      if (!m || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
+      if (isMathMode(value.slice(0, pos), true)) return false;
+      const name = m[1] || 'default';
+      window.margin.texTemplate(name).then(text => {
+        if (text == null) { toast(`No template "${name}" — see LaTeX › Templates`); return; }
+        if (source.value.slice(lineStart, pos) !== trigger) return; // typed on meanwhile
+        const d = new Date();
+        const date = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) +
+          ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        const file = (docOf(source).split('/').pop() || '').replace(/\.tex$/i, '');
+        insertSnippet(source, lineStart, pos, text.replace(/\{\{date\}\}/g, date).replace(/\{\{file\}\}/g, file));
+      });
       return true;
     }
 
@@ -2507,7 +2637,7 @@
     function autoFraction(source) {
       const value = source.value;
       const start = source.selectionStart, end = source.selectionEnd;
-      if (!isMathMode(value.slice(0, start))) return false;
+      if (!isMathMode(value.slice(0, start), isTexSource(source))) return false;
       let numerator, from;
       if (start !== end) { numerator = value.slice(start, end); from = start; }
       else {
@@ -2532,7 +2662,7 @@
     function autoPair(source, key) {
       const close = PAIRS[key];
       const start = source.selectionStart, end = source.selectionEnd;
-      if (!isMathMode(source.value.slice(0, start))) return false;
+      if (!isMathMode(source.value.slice(0, start), isTexSource(source))) return false;
       const selected = source.value.slice(start, end);
       source.setRangeText(key + selected + close, start, end, 'end');
       if (selected) source.setSelectionRange(start + 1, start + 1 + selected.length);
@@ -2545,7 +2675,7 @@
     function typeOverPair(source, key) {
       const pos = source.selectionStart;
       if (pos !== source.selectionEnd || source.value[pos] !== key) return false;
-      if (!isMathMode(source.value.slice(0, pos))) return false;
+      if (!isMathMode(source.value.slice(0, pos), isTexSource(source))) return false;
       source.setSelectionRange(pos + 1, pos + 1);
       return true;
     }
@@ -2596,6 +2726,7 @@
 
     // The table around the caret, as rows of cells, plus which cell the caret is in.
     function tableContext(source) {
+      if (isTexSource(source)) return null; // a Markdown table means nothing in LaTeX
       const value = source.value, pos = source.selectionStart;
       const prefix = value.slice(0, pos);
       if (isMathMode(prefix) || inCodeFence(prefix)) return null;
@@ -2651,6 +2782,7 @@
 
     // "tbl" gives 3 columns × 2 rows; "tbl4x5" gives 4 columns × 5 rows
     function expandTable(source) {
+      if (isTexSource(source)) return false;
       const value = source.value, pos = source.selectionStart;
       if (pos !== source.selectionEnd) return false;
       const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
@@ -2727,6 +2859,7 @@
     let ggbTarget = null; // { source, pos } — the note waiting for the picture
 
     function expandGeoGebra(source) {
+      if (isTexSource(source)) return false; // it inserts a Markdown picture
       const value = source.value, pos = source.selectionStart;
       if (pos !== source.selectionEnd) return false;
       const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
@@ -2945,7 +3078,8 @@
       }
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (moveSnippetTab(source) || expandTable(source) || expandGeoGebra(source) || expandSnippet(source, false) ||
+        if (moveSnippetTab(source) || expandTemplate(source) || expandTable(source) || expandGeoGebra(source) ||
+          expandSnippet(source, false) ||
           tableTab(source, false) || tabOut(source)) return true;
         source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
         source.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2963,7 +3097,8 @@
     // same rules as renderMarkdown: code is never math, finished spans are
     // closed, and an inline $ cannot cross a line — so a stray "5$" or a
     // `$HOME` in code no longer flips every line below it into math.
-    function isMathMode(value) {
+    function isMathMode(value, tex = false) {
+      if (tex) return isTexMathMode(value);
       if ((value.match(/```/g) || []).length % 2) return false; // inside a code fence
       const blank = m => m.replace(/[^\n]+/g, ' ');
       let s = value.replace(CODE_RE, blank);
@@ -2972,6 +3107,23 @@
       return /\$\$(?:(?!\$\$)[\s\S])*$/.test(s) || /\\\[(?:(?!\\\])[\s\S])*$/.test(s) ||
         /\\\((?:(?!\\\))[\s\S])*$/.test(s) || /(^|[^\\$])\$(?!\s)(?:\\.|[^$\\\n])*$/.test(s);
     }
+
+    // The same question for a .tex file: % starts a comment, backticks are
+    // quotes rather than code, and math environments count as math too
+    const TEX_MATH_ENVS = /\\(begin|end)\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|math)\*?\}/g;
+    function isTexMathMode(value) {
+      const s = value.replace(/(^|[^\\])%[^\n]*/g, '$1');
+      let inEnv = false;
+      for (const m of s.matchAll(TEX_MATH_ENVS)) inEnv = m[1] === 'begin';
+      if (inEnv) return true;
+      const t = s.replace(MATH_RE, m => m.replace(/[^\n]+/g, ' '));
+      return /\$\$(?:(?!\$\$)[\s\S])*$/.test(t) || /\\\[(?:(?!\\\])[\s\S])*$/.test(t) ||
+        /\\\((?:(?!\\\))[\s\S])*$/.test(t) || /(^|[^\\$])\$(?!\s)(?:\\.|[^$\\\n])*$/.test(t);
+    }
+
+    // the editor of a .tex file (the note editors are all Markdown)
+    const isTexPath = p => /\.tex$/i.test(p || '');
+    const isTexSource = source => !!source.closest('.pane-note.tex');
 
     function escapeRegExp(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -3017,10 +3169,22 @@
     $('#latexbtn').onclick = () => {
       $('#snippet-filter').value = '';
       paintSnippetSettings();
+      paintTemplateNames();
       $('#latex-settings').classList.remove('hidden');
     };
     $('#snippet-filter').addEventListener('input', paintSnippetSettings);
     $('#snippet-close').onclick = () => $('#latex-settings').classList.add('hidden');
+    async function paintTemplateNames() {
+      const box = $('#template-names');
+      if (!hasShell) { $('#tex-templates').hidden = true; return; }
+      const { names } = await window.margin.texTemplates();
+      box.innerHTML = '';
+      names.forEach((n, i) => {
+        const code = document.createElement('code'); code.textContent = n === 'default' ? '!' : '!' + n;
+        box.append(...(i ? [', ', code] : [code]));
+      });
+    }
+    $('#templates-open').onclick = () => window.margin.openTemplates();
     $('#snippet-add').onclick = () => {
       snippets.push({ trigger: '', template: '$0', mode: 'math' });
       $('#snippet-filter').value = '';
@@ -3697,14 +3861,21 @@
       const rendered = document.createElement('div');
       rendered.className = 'note-render notefile-render';
       notePage.append(src, rendered);
-      note.appendChild(notePage);
+      // a .tex file's compiled PDF, right next to its source
+      const preview = document.createElement('div'); preview.className = 'tex-preview'; preview.hidden = true;
+      const texStatus = document.createElement('div'); texStatus.className = 'tex-status';
+      const texPages = document.createElement('div'); texPages.className = 'tex-pages';
+      preview.append(texStatus, texPages);
+      note.append(notePage, preview);
       // shown when this specific pane has nothing open — distinct from the
       // global #drop screen, which only applies when NO pane has anything
       const empty = document.createElement('div'); empty.className = 'pane-empty hidden';
       empty.innerHTML = '<strong>No file open</strong><span>Click a file in the sidebar</span>';
       paneSurface.append(pages, note, empty);
       el.append(tabbar, paneSurface);
-      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty });
+      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty, preview, texStatus, texPages, tex: null });
+      texStatus.addEventListener('click', () => jumpToTexError(pane));
+      new ResizeObserver(() => relayoutTexPreview(pane)).observe(preview);
 
       // the pane you touch is the pane you are working in
       paneSurface.addEventListener('mousedown', () => focusPane(pane));
@@ -3840,7 +4011,7 @@
       const tab = pane.tabs.find(t => t.id === pane.activeTabId);
       if (!tab || !tab.loaded) return;
       await flushSaves();
-      tab.scrollTop = pane.surface.scrollTop;
+      tab.scrollTop = isTexPath(tab.path) ? pane.src.scrollTop : pane.surface.scrollTop;
       if (tab.type === 'pdf') {
         Object.assign(tab, {
           doc: State.doc, path: State.path, key: State.key, name: State.name,
@@ -3912,14 +4083,30 @@
           notes: [], highlights: [], pages: [], audioDuration: 0
         });
         $('#pageinfo').textContent = '';
-        const source = focusedPane.src, rendered = focusedPane.rendered;
-        focusedPane.note.dataset.doc = tab.path || '';
-        source.value = tab.text || ''; source._snippetStops = null;
-        renderMarkdown(source.value, rendered);
-        source.hidden = true; rendered.hidden = false;
         setMode('note');
+        showNoteTab(focusedPane, tab);
       }
-      surface.scrollTop = tab.scrollTop || 0;
+      if (!isTexPath(tab.path)) surface.scrollTop = tab.scrollTop || 0;
+    }
+
+    // A note tab shows as rendered Markdown — or, for .tex, as plain source
+    // that is always open for typing, with its compiled PDF beside it
+    function showNoteTab(pane, tab) {
+      const tex = tab.type === 'note' && isTexPath(tab.path);
+      pane.note.classList.toggle('tex', tex);
+      pane.surface.classList.toggle('tex', tex);
+      pane.preview.hidden = !tex;
+      pane.note.dataset.doc = tab.path || '';
+      pane.src.value = tab.text || ''; pane.src._snippetStops = null;
+      if (tex) {
+        pane.src.style.height = '';
+        pane.rendered.hidden = true; pane.src.hidden = false;
+        pane.src.scrollTop = tab.scrollTop || 0;
+        showTexPreview(pane, tab.path);
+      } else {
+        renderMarkdown(pane.src.value, pane.rendered);
+        pane.src.hidden = true; pane.rendered.hidden = false;
+      }
     }
 
     async function activateTab(id, { focus = true, pane = focusedPane } = {}) {
@@ -3936,7 +4123,7 @@
       if (!await loadTab(tab)) { closeTab(id, { silent: true, pane }); return false; }
       restoreTab(tab);
       paintTabs(pane); renderTree(); rememberTabs();
-      if (focus) pane.surface.focus();
+      if (focus) (tab.type === 'note' && isTexPath(tab.path) ? pane.src : pane.surface).focus();
       return true;
     }
 
@@ -4024,6 +4211,7 @@
       pane.pages.classList.toggle('hidden', mode !== 'pdf');
       pane.note.classList.toggle('hidden', mode !== 'note');
       pane.empty.classList.toggle('hidden', mode !== 'empty');
+      if (mode !== 'note') pane.surface.classList.remove('tex'); // a PDF needs its scrollbar back
       // io and the lecture player both belong to whichever pane is actually
       // focused — setting an unfocused pane's mode (e.g. it just lost its
       // last tab in a split move) must not tear down what the user is
@@ -4050,13 +4238,9 @@
         for (const child of pane.pages.children) child.hidden = child.dataset.tab !== String(tab.id);
       } else {
         setMode('note', pane);
-        pane.note.dataset.doc = tab.path || '';
-        pane.src.value = tab.text || '';
-        renderMarkdown(pane.src.value, pane.rendered);
-        pane.src.hidden = true;
-        pane.rendered.hidden = false;
+        showNoteTab(pane, tab);
       }
-      pane.surface.scrollTop = tab.scrollTop || 0;
+      if (!isTexPath(tab.path)) pane.surface.scrollTop = tab.scrollTop || 0;
     }
 
     /* ------------------------------------------------------------------ *
@@ -4151,7 +4335,7 @@
     function buildRows(entries, depth) {
       const frag = document.createDocumentFragment();
       for (const entry of entries) {
-        const kind = entry.isDir ? 'dir' : (extOf(entry.name) === 'pdf' ? 'file-pdf' : /^(md|markdown|txt)$/.test(extOf(entry.name)) ? 'file-md' : 'file-other');
+        const kind = entry.isDir ? 'dir' : (extOf(entry.name) === 'pdf' ? 'file-pdf' : /^(md|markdown|txt|tex)$/.test(extOf(entry.name)) ? 'file-md' : 'file-other');
         const row = document.createElement('div');
         row.className = 'tree-row ' + kind;
         row.style.paddingLeft = (10 + depth * 14) + 'px';
@@ -4186,7 +4370,7 @@
       }
       const ext = extOf(entry.name);
       if (ext === 'pdf') await openPdfFromTree(entry.path);
-      else if (/^(md|markdown|txt)$/.test(ext)) await openNoteFile(entry.path);
+      else if (/^(md|markdown|txt|tex)$/.test(ext)) await openNoteFile(entry.path);
       else toast(`Margin can't open .${ext} files`);
     }
 
@@ -4207,14 +4391,169 @@
     }
     async function saveNoteFile() {
       if (!State.activeFile || State.activeFile.type !== 'note') return;
-      try { await window.margin.writeText(State.activeFile.path, focusedPane.src.value); }
-      catch (e) { toast('Note could not be saved: ' + e.message); }
+      const path = State.activeFile.path;
+      try { await window.margin.writeText(path, focusedPane.src.value); }
+      catch (e) { toast('Note could not be saved: ' + e.message); return; }
+      if (isTexPath(path)) compileTex(path);
+    }
+
+    async function compileTexNow() {
+      if (noteSaveTimer) { clearTimeout(noteSaveTimer); noteSaveTimer = null; await saveNoteFile(); }
+      else if (State.activeFile && isTexPath(State.activeFile.path)) compileTex(State.activeFile.path);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  .tex — the compiled PDF sits right beside the source, the way Castel
+     *  keeps Zathura next to Vim. Opening the file compiles it, and so does
+     *  every save. A chapter (lec_03.tex) compiles its master file and shows
+     *  that PDF. Rebuilds keep the preview where it was scrolled to.
+     * ------------------------------------------------------------------ */
+    const texJobs = new Map(); // root .tex -> { running, again, last }
+
+    async function showTexPreview(pane, path) {
+      const token = pane.texToken = (pane.texToken || 0) + 1;
+      const info = await window.margin.texInfo(path);
+      if (pane.texToken !== token) return;
+      const same = pane.tex && pane.tex.pdf === info.pdf;
+      if (!same) {
+        if (pane.tex && pane.tex.doc) pane.tex.doc.destroy();
+        pane.tex = { path, root: info.root, pdf: info.pdf, mtime: 0, doc: null };
+        pane.texPages.innerHTML = '<div class="tex-empty">' + (info.mtime ? 'Loading…' : 'Compiling…') + '</div>';
+      } else pane.tex.path = path;
+      const job = texJobs.get(info.root);
+      paintTexStatus(pane, job && job.running ? { running: true } : job && job.last);
+      if (info.mtime && info.mtime !== pane.tex.mtime) await loadTexPdf(pane, info.mtime);
+      if (!job) compileTex(path); // first time this session: compile on open
+    }
+
+    async function compileTex(path) {
+      const { root } = await window.margin.texInfo(path);
+      let job = texJobs.get(root);
+      if (!job) texJobs.set(root, job = { running: false, again: false, last: null });
+      if (job.running) { job.again = true; return; }
+      job.running = true;
+      const showing = () => panes.filter(p => p.tex && p.tex.root === root && !p.preview.hidden);
+      try {
+        do {
+          job.again = false;
+          showing().forEach(p => paintTexStatus(p, { running: true }));
+          job.last = await window.margin.texCompile(path);
+          for (const pane of showing()) {
+            paintTexStatus(pane, job.last);
+            if (job.last.mtime && job.last.mtime !== pane.tex.mtime) await loadTexPdf(pane, job.last.mtime);
+            else if (!job.last.mtime) pane.texPages.innerHTML = '<div class="tex-empty">No PDF — see the errors above</div>';
+          }
+        } while (job.again);
+      } catch (e) {
+        job.last = { ok: false, errors: [{ line: 0, message: e.message }] };
+        showing().forEach(p => paintTexStatus(p, job.last));
+      } finally { job.running = false; }
+    }
+
+    function paintTexStatus(pane, res) {
+      const el = pane.texStatus;
+      el.classList.toggle('error', !!(res && res.errors && res.errors.length));
+      pane.texError = null;
+      if (!res) { el.textContent = 'LaTeX'; return; }
+      if (res.running) { el.textContent = 'Compiling…'; return; }
+      if (res.errors && res.errors.length) {
+        const mine = res.errors.find(e => e.file === pane.tex.path) || res.errors[0];
+        pane.texError = mine;
+        const where = mine.line ? `${mine.file && mine.file !== pane.tex.path ? mine.file.split('/').pop() + ' ' : ''}line ${mine.line}: ` : '';
+        el.textContent = `✗ ${res.errors.length > 1 ? res.errors.length + ' errors · ' : ''}${where}${mine.message}`;
+        el.title = res.errors.map(e => (e.line ? `${(e.file || '').split('/').pop()}:${e.line}: ` : '') + e.message).join('\n');
+        return;
+      }
+      el.title = '';
+      el.textContent = `✓ Compiled in ${(res.ms / 1000).toFixed(1)} s`;
+    }
+
+    // a click on the error puts the caret on that line
+    function jumpToTexError(pane) {
+      const err = pane.texError;
+      if (!err || !err.line || (err.file && err.file !== pane.tex.path)) return;
+      const src = pane.src, lines = src.value.split('\n');
+      const at = lines.slice(0, err.line - 1).reduce((n, l) => n + l.length + 1, 0);
+      focusPane(pane);
+      src.focus();
+      src.setSelectionRange(at, at + (lines[err.line - 1] || '').length);
+      src.scrollTop += caretClientY(src, at) - (src.getBoundingClientRect().top + src.clientHeight / 3);
+    }
+
+    async function loadTexPdf(pane, mtime) {
+      const t = pane.tex, seq = pane.texLoad = (pane.texLoad || 0) + 1;
+      const f = await window.margin.readPdf(t.pdf);
+      if (!f || pane.tex !== t || pane.texLoad !== seq) return;
+      let doc;
+      try { doc = await pdfjsLib.getDocument({ data: f.bytes }).promise; }
+      catch { return; } // caught mid-write; the next compile brings a whole one
+      if (pane.tex !== t || pane.texLoad !== seq) { doc.destroy(); return; }
+      const old = t.doc;
+      t.doc = doc; t.mtime = mtime;
+      await layoutTexPreview(pane);
+      if (old) old.destroy();
+    }
+
+    // Every page at the preview's width. The pages in view are drawn before
+    // the new set replaces the old one, so a rebuild doesn't flash.
+    async function layoutTexPreview(pane) {
+      const t = pane.tex, doc = t && t.doc;
+      if (!doc || pane.preview.hidden) return;
+      const width = Math.max(120, pane.preview.clientWidth - 28);
+      const host = document.createElement('div'); host.className = 'tex-pages';
+      const pages = [];
+      for (let n = 1; n <= doc.numPages; n++) {
+        const page = await doc.getPage(n);
+        const vp = page.getViewport({ scale: 1 });
+        const el = document.createElement('div'); el.className = 'tex-page';
+        el.style.width = width + 'px'; el.style.height = Math.round(vp.height * width / vp.width) + 'px';
+        el.dataset.i = pages.length;
+        host.appendChild(el);
+        pages.push({ page, el, scale: width / vp.width, drawn: false });
+      }
+      if (pane.tex !== t || t.doc !== doc) return;
+      const scrollTop = pane.preview.scrollTop, view = pane.preview.clientHeight;
+      let y = 14 + pane.texStatus.offsetHeight;
+      await Promise.all(pages.map(p => {
+        const h = parseFloat(p.el.style.height), visible = y + h > scrollTop - 200 && y < scrollTop + view + 200;
+        y += h + 12;
+        return visible ? drawTexPage(p) : null;
+      }));
+      if (pane.tex !== t || t.doc !== doc) return;
+      pane.texPages.replaceWith(host);
+      pane.texPages = host;
+      pane.preview.scrollTop = scrollTop;
+      pane.texWidth = width;
+      if (pane.texIo) pane.texIo.disconnect();
+      pane.texIo = new IntersectionObserver(entries => {
+        for (const e of entries) if (e.isIntersecting) drawTexPage(pages[+e.target.dataset.i]);
+      }, { root: pane.preview, rootMargin: '600px 0px' });
+      for (const p of pages) if (!p.drawn) pane.texIo.observe(p.el);
+    }
+
+    async function drawTexPage(p) {
+      if (p.drawn) return;
+      p.drawn = true;
+      const vp = p.page.getViewport({ scale: p.scale * DPR });
+      const c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      await p.page.render({ canvasContext: c.getContext('2d', { alpha: false }), viewport: vp }).promise;
+      p.el.appendChild(c);
+    }
+
+    let texRelayoutTimer = null;
+    function relayoutTexPreview(pane) {
+      if (!pane.tex || !pane.tex.doc || pane.preview.hidden) return;
+      if (Math.abs(Math.max(120, pane.preview.clientWidth - 28) - (pane.texWidth || 0)) < 2) return;
+      clearTimeout(texRelayoutTimer);
+      texRelayoutTimer = setTimeout(() => layoutTexPreview(pane), 150);
     }
 
     function initNoteEditor(pane) {
       const source = pane.src, rendered = pane.rendered;
       const finish = () => {
         if (ggbTarget && ggbTarget.source === source) return; // the picture is still coming
+        if (pane.note.classList.contains('tex')) return; // LaTeX stays source; its PDF is the preview
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
       };
@@ -4229,7 +4568,11 @@
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
         if (handleMathKey(source, e)) return;
-        if (e.key === 'Escape') { e.preventDefault(); finish(); pane.surface.focus(); }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (pane.note.classList.contains('tex')) { compileTexNow(); return; } // Esc compiles right away
+          finish(); pane.surface.focus();
+        }
       });
       rendered.addEventListener('click', edit);
     }
@@ -4774,6 +5117,7 @@
     }
 
     function autoGrow(ta) {
+      if (ta.closest('.pane-note.tex')) return; // that editor scrolls itself
       // collapsing to 'auto' to measure would briefly shrink the page, which
       // clamps the pane's scrollTop and leaves the caret pinned to the bottom
       // edge — hold the parent's height so the scroll position survives
