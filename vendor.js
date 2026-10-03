@@ -1,6 +1,7 @@
 // Copies pdf.js, KaTeX and marked into vendor/ so the app runs with no network.
 // Run: npm i pdfjs-dist@3.11.174 katex@0.16.9 marked@12.0.2 && npm run vendor
 // Add GeoGebra (about 50 MB, downloaded once): npm run vendor -- --geogebra
+// Add the LaTeX language server TexLab (about 15 MB): npm run vendor -- --texlab
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -46,6 +47,24 @@ if (process.argv.includes('--geogebra')) {
     fs.cpSync(path.join(tmp, 'GeoGebra'), to, { recursive: true });
     console.log('copied: geogebra/');
   } catch (e) { console.warn('GeoGebra download failed:', e.message); missing++; }
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// TexLab, the LaTeX language server — a single binary from its GitHub releases
+if (process.argv.includes('--texlab')) {
+  const version = 'v5.26.0';
+  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'margin-texlab-'));
+  const tgz = path.join(tmp, 'texlab.tar.gz'), to = path.join(out, 'texlab');
+  try {
+    console.log(`downloading TexLab ${version}…`);
+    execFileSync('curl', ['-fsSL', '-o', tgz,
+      `https://github.com/latex-lsp/texlab/releases/download/${version}/texlab-${arch}-macos.tar.gz`]);
+    fs.mkdirSync(to, { recursive: true });
+    execFileSync('tar', ['xzf', tgz, '-C', to]);
+    fs.chmodSync(path.join(to, 'texlab'), 0o755);
+    console.log('copied: texlab/');
+  } catch (e) { console.warn('TexLab download failed:', e.message); missing++; }
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 

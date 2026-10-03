@@ -29,6 +29,9 @@
         "dmg"
       ]
     },
+    "asarUnpack": [
+      "vendor/texlab/**"
+    ],
     "files": [
       "main.js",
       "preload.js",

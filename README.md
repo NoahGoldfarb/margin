@@ -98,7 +98,37 @@ lines with errors turn red.
 - LaTeX's build files (`.aux`, `.log`, `.synctex.gz`, …) and the `.assets`
   folders with pictures are hidden from the sidebar.
 
+The editor works like Overleaf's (minus the AI):
+
+- **Syntax colours** for commands, environments, math and comments.
+- **Pairs close themselves**: `$` gives `$|$` (a second `$` makes `$$|$$`),
+  `{`, `[`, `(` close too, `\{` gives `\{|\}`, `\[` gives `\[|\]`; typing the
+  closer steps over it, Backspace removes an empty pair, and with text selected
+  the pair goes around it.
+- **Completion while you type**, from [TexLab](https://github.com/latex-lsp/texlab),
+  the LaTeX language server — after `\` for commands (the common ones first),
+  and inside `\ref{…}`, `\cite{…}` (with title and author from your `.bib`),
+  `\begin{…}`, `\usepackage{…}`, `\input{…}`. `↑`/`↓` to choose, `Enter` or
+  `Tab` to take it, `Esc` to close. `\frac` comes with `{|}{}` and Tab to the
+  next argument, `\section` with `{|}` (also your own `\newcommand`s with
+  `[n]` arguments); an environment from `\begin{` brings its `\end{…}`.
+  Once the word is complete, `Enter` just starts a new line.
+- **Problems in the line numbers** — red for errors, amber for warnings; hover
+  a number for the message.
+- `Enter` keeps the indentation (one step more after `\begin{…}`), `⌘/`
+  comments lines in and out, `⌘B` / `⌘I` wrap in `\textbf{}` / `\textit{}`,
+  `⌘F` finds and replaces in the file, `⌘↩` recompiles, `⌘Z` undoes snippets
+  and completions like any other typing.
+- **SyncTeX** — double-click the PDF to jump to that line of source; `⌘⌥J`
+  shows where the caret's line is in the PDF.
+- **Go to definition** — `⌘`-click or `F12` on a `\ref`, `\cite` or command.
+- The snippets work as in notes and know LaTeX's math (inside `align`,
+  `equation` and friends counts as math, `%` comments don't); `dm` gives
+  `\[ … \]` here.
+
 Needs a TeX installation with `latexmk` ([MacTeX](https://tug.org/mactex/)).
+TexLab ships with the app; from a source checkout, `npm run vendor -- --texlab`
+downloads it once (or `brew install texlab`).
 
 ## Writing
 

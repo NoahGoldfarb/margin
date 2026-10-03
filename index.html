@@ -1239,14 +1239,189 @@
       color: var(--note-text)
     }
 
+    .tex-gutter span.warn {
+      color: #C08A1E;
+      font-weight: 600
+    }
+
+    #lsp-complete {
+      position: fixed;
+      z-index: 40;
+      min-width: 220px;
+      max-width: 480px;
+      max-height: 264px;
+      overflow-y: auto;
+      padding: 3px 0;
+      background: var(--ink-2);
+      border: 1px solid var(--rule-strong);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+      font: 12.5px var(--mono);
+    }
+
+    #lsp-complete[hidden] {
+      display: none
+    }
+
+    #lsp-complete .item {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 3px 10px;
+      color: var(--chrome-text);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    #lsp-complete .item.active {
+      background: var(--pen-soft);
+      color: var(--chrome-strong)
+    }
+
+    #lsp-complete .detail {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--chrome-dim);
+      font: 11.5px var(--sans);
+    }
+
     .tex-gutter span.error {
       color: #D04848;
       font-weight: 600
     }
 
-    .pane-note.tex .notefile-src {
+    .src-wrap {
+      position: relative
+    }
+
+    .tex-layer,
+    .tex-find {
+      display: none
+    }
+
+    .pane-note.tex .src-wrap {
       flex: 1 1 0;
       min-width: 0;
+      height: 100%;
+    }
+
+    /* the coloured text is drawn underneath; the editor on top is transparent */
+    .pane-note.tex .tex-layer {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      margin: 0;
+      overflow: hidden;
+      pointer-events: none;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      font-family: var(--mono);
+      font-size: calc(13.5px * var(--editor-font-scale));
+      line-height: 1.6;
+      tab-size: 4;
+      color: var(--note-text);
+    }
+
+    .tex-hl .m { color: #A23B72 }
+    .tex-hl .td { color: #A23B72; font-weight: 600 }
+    .tex-hl .tk { color: var(--pen) }
+    .tex-hl .te { color: #2E7D5B }
+    .tex-hl .tb { color: var(--note-muted) }
+    .tex-hl .tc { color: var(--note-muted); font-style: italic }
+
+    .pane-note.tex .tex-marks {
+      color: transparent
+    }
+
+    .tex-marks mark {
+      color: transparent;
+      background: rgba(255, 196, 0, .35);
+      border-radius: 2px;
+    }
+
+    .tex-marks mark.current {
+      background: rgba(255, 140, 0, .6)
+    }
+
+    .pane-note.tex .tex-find:not([hidden]) {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto auto;
+      gap: 4px;
+      position: absolute;
+      top: 6px;
+      right: 18px;
+      z-index: 3;
+      width: min(420px, 90%);
+      padding: 6px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule-strong);
+      border-radius: 6px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+      font: 12px var(--sans);
+    }
+
+    .tex-find input {
+      min-width: 0;
+      padding: 4px 6px;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      background: var(--ink);
+      color: var(--chrome-strong);
+      font: 12px var(--mono);
+    }
+
+    .tex-find button {
+      padding: 3px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      background: var(--ink);
+      color: var(--chrome-text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .tex-find button.on {
+      border-color: var(--pen);
+      color: var(--chrome-strong)
+    }
+
+    .tex-find .count {
+      align-self: center;
+      min-width: 52px;
+      text-align: center;
+      color: var(--chrome-dim);
+    }
+
+    .tex-find .replace {
+      grid-column: 1 / 2
+    }
+
+    .tex-sync {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255, 196, 0, .45);
+      border-radius: 2px;
+      animation: tex-sync 1.6s ease-out forwards;
+    }
+
+    @keyframes tex-sync {
+      0%, 50% { opacity: 1 }
+      100% { opacity: 0 }
+    }
+
+    .pane-note.tex .notefile-src::selection {
+      color: transparent;
+      background: var(--pen-soft)
+    }
+
+    .pane-note.tex .notefile-src {
+      position: relative;
+      width: 100%;
+      color: transparent;
+      background: transparent;
+      caret-color: var(--note-text);
       font-family: var(--mono);
       font-size: calc(13.5px * var(--editor-font-scale));
       line-height: 1.6;
@@ -1294,6 +1469,7 @@
     }
 
     .tex-page {
+      position: relative;
       margin: 0 auto 12px;
       background: #fff;
       box-shadow: 0 1px 0 rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .35);
@@ -2062,6 +2238,12 @@
         <dt>! + Tab</dt>
         <dd>In a <code>.tex</code> file: insert a whole document from a template (<code>!castel</code> for another one).
           The PDF compiles beside it on every save; Esc compiles right away</dd>
+        <dt>In .tex</dt>
+        <dd><code>$</code> and brackets close themselves · ⌘/ comment · ⌘B / ⌘I bold / italic · ⌘F find &amp; replace ·
+          ⌘↩ recompile · double-click the PDF to jump to the source, ⌘⌥J the other way</dd>
+        <dt>⌘-click / F12</dt>
+        <dd>In a <code>.tex</code> file: jump to the <code>\label</code>, <code>\cite</code> entry or definition under the caret.
+          The completion list opens by itself after <code>\</code> and in <code>\ref{</code>, <code>\cite{</code>, <code>\begin{</code> …</dd>
         <dt>ggb / geo + Tab</dt>
         <dd>Open GeoGebra for a graph (<code>ggb</code>) or geometry without axes (<code>geo</code>); <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
           Drag a picture's corner dot to resize it</dd>
@@ -2418,6 +2600,9 @@
 
     // mode: 'math' fires only inside $…$, 'text' only outside, omitted = both.
     const mathSnip = (trigger, template) => ({ trigger, template, mode: 'math' });
+    // In a .tex file these default snippets become their LaTeX form
+    const TEX_SNIPPETS = { dm: { md: '$$\n$0\n$$', tex: '\\[\n$0\n\\]' } };
+
     const DEFAULT_SNIPPETS = [
       // entering math
       { trigger: 'mk', template: '$$0$', mode: 'text' },
@@ -2530,7 +2715,7 @@
       const prefix = value.slice(0, cursorPosition);
       const ending = typedSpace && prefix.endsWith(' ') ? prefix.slice(0, -1) : prefix;
       const inMath = isMathMode(ending, isTexSource(source));
-      const boundary = inMath ? '(?:^|[^A-Za-z])' : '(?:^|\\s|\\d)';
+      const boundary = inMath ? '(?:^|[^A-Za-z\\\\])' : '(?:^|\\s|\\d)';
       const match = snippets
         .filter(x => {
           if (!x.trigger) return false;
@@ -2544,15 +2729,30 @@
           return new RegExp(`${boundary}${escapeRegExp(x.trigger)}$`).test(ending);
         });
       if (!match) return false;
-      insertSnippet(source, ending.length - match.trigger.length, cursorPosition, match.template);
+      const tex = TEX_SNIPPETS[match.trigger];
+      const template = isTexSource(source) && tex && match.template === tex.md ? tex.tex : match.template;
+      insertSnippet(source, ending.length - match.trigger.length, cursorPosition, template);
       return true;
     }
 
-    // Replace from…to with `template`, whose $1, $2 … $0 become the Tab stops
+    // Replace from…to with `text` the way typing would, so ⌘Z takes it back
+    // (assigning .value or setRangeText wipes the editor's undo history).
+    // Fires exactly one input event. When the editor isn't the focused element,
+    // execCommand would write into whatever is, so that case falls back.
+    function editText(ta, from, to, text) {
+      if (from === to && !text) return;
+      if (document.activeElement === ta) {
+        ta.setSelectionRange(from, to);
+        if (document.execCommand(text ? 'insertText' : 'delete', false, text)) return;
+      }
+      ta.setRangeText(text, from, to, 'end');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // Replace from…to with `template`, whose $0, $1, $2 … become the Tab stops
     function insertSnippet(source, from, to, template) {
       const value = source.value;
       const before = value.slice(0, from);
-      const suffix = value.slice(to);
       const stops = [];
       const replacement = template.replace(/\$(\d+)/g, (_, number) => {
         stops.push({ number: Number(number), offset: 0 });
@@ -2564,13 +2764,14 @@
         return '';
       });
       stops.sort((a, b) => a.number - b.number);
-      source.value = before + replacement + suffix;
+      source._snippetStops = null;
+      skipCompletion = isTexSource(source); // the list shouldn't pop up over what was just inserted
+      editText(source, from, to, replacement);
       source._snippetStops = stops.map(stop => before.length + stop.offset);
       source._snippetIndex = 0;
       const position = source._snippetStops[0] ?? before.length + replacement.length;
       source.setSelectionRange(position, position);
       source._snippetValue = source.value;
-      source.dispatchEvent(new Event('input', { bubbles: true }));
       autoGrow(source);
     }
 
@@ -2687,28 +2888,35 @@
         from = s; numerator = value.slice(s, start);
       }
       if (!numerator) return false;
-      const before = value.slice(0, from), after = value.slice(end);
       const head = '\\frac{' + numerator + '}{';
-      source.value = before + head + '}' + after;
-      const caret = before.length + head.length;
+      source._snippetStops = null;
+      skipCompletion = isTexSource(source);
+      editText(source, from, end, head + '}');
+      const caret = from + head.length;
       source.setSelectionRange(caret, caret);
       source._snippetStops = [caret, caret + 1]; // denominator, then out past "}"
       source._snippetIndex = 0;
       source._snippetValue = source.value;
-      source.dispatchEvent(new Event('input', { bubbles: true }));
       autoGrow(source);
       return true;
     }
 
+    // In a .tex file a pair opens everywhere outside comments, but not right in
+    // front of a word; after a backslash it pairs as \{…\}, \[…\], \(…\).
+    // In notes it stays a math-only thing.
+    function inTexComment(source, pos) {
+      const value = source.value, line = value.slice(value.lastIndexOf('\n', pos - 1) + 1, pos);
+      return /(^|[^\\])%/.test(line);
+    }
     function autoPair(source, key) {
-      const close = PAIRS[key];
-      const start = source.selectionStart, end = source.selectionEnd;
-      if (!isMathMode(source.value.slice(0, start), isTexSource(source))) return false;
-      const selected = source.value.slice(start, end);
-      source.setRangeText(key + selected + close, start, end, 'end');
-      if (selected) source.setSelectionRange(start + 1, start + 1 + selected.length);
-      else source.setSelectionRange(start + 1, start + 1);
-      source.dispatchEvent(new Event('input', { bubbles: true }));
+      const tex = isTexSource(source);
+      const start = source.selectionStart, end = source.selectionEnd, value = source.value;
+      if (tex ? inTexComment(source, start) : !isMathMode(value.slice(0, start))) return false;
+      const selected = value.slice(start, end);
+      if (tex && !selected && /[\w\\]/.test(value[end] || '')) return false;
+      const escaped = tex && value[start - 1] === '\\' && value[start - 2] !== '\\';
+      editText(source, start, end, key + selected + (escaped ? '\\' : '') + PAIRS[key]);
+      source.setSelectionRange(start + 1, start + 1 + selected.length);
       return true;
     }
 
@@ -2716,19 +2924,45 @@
     function typeOverPair(source, key) {
       const pos = source.selectionStart;
       if (pos !== source.selectionEnd || source.value[pos] !== key) return false;
-      if (!isMathMode(source.value.slice(0, pos), isTexSource(source))) return false;
+      if (!isTexSource(source) && !isMathMode(source.value.slice(0, pos))) return false;
       source.setSelectionRange(pos + 1, pos + 1);
+      return true;
+    }
+
+    // $ in a .tex file gives $|$; a second $ inside the empty pair makes it
+    // $$|$$, and in front of a closing $ it steps over. \$ stays a dollar.
+    function texDollar(source) {
+      const start = source.selectionStart, end = source.selectionEnd, value = source.value;
+      if (value[start - 1] === '\\' || inTexComment(source, start)) return false;
+      if (start !== end) {
+        editText(source, start, end, '$' + value.slice(start, end) + '$');
+        source.setSelectionRange(start + 1, end + 1);
+        return true;
+      }
+      if (value[start] === '$') {
+        if (value[start - 1] === '$' && value[start - 2] !== '$') editText(source, start, start, '$$');
+        source.setSelectionRange(start + 1, start + 1);
+        return true;
+      }
+      if (isTexMathMode(value.slice(0, start)) || /\w/.test(value[start] || '')) return false; // closing, or before a word
+      editText(source, start, start, '$$');
+      source.setSelectionRange(start + 1, start + 1);
       return true;
     }
 
     // backspace between an empty pair removes both halves
     function deletePair(source) {
-      const pos = source.selectionStart;
+      const pos = source.selectionStart, value = source.value;
       if (pos !== source.selectionEnd || pos === 0) return false;
-      const open = source.value[pos - 1];
-      if (!PAIRS[open] || PAIRS[open] !== source.value[pos]) return false;
-      source.setRangeText('', pos - 1, pos + 1, 'end');
-      source.dispatchEvent(new Event('input', { bubbles: true }));
+      const open = value[pos - 1];
+      if (isTexSource(source)) {
+        if (open === '$' && value[pos] === '$') { editText(source, pos - 1, pos + 1, ''); return true; }
+        if (value[pos - 2] === '\\' && PAIRS[open] && value.slice(pos, pos + 2) === '\\' + PAIRS[open]) {
+          editText(source, pos - 2, pos + 2, ''); return true;
+        }
+      }
+      if (!PAIRS[open] || PAIRS[open] !== value[pos]) return false;
+      editText(source, pos - 1, pos + 1, '');
       return true;
     }
 
@@ -2812,12 +3046,11 @@
     // re-align the table and select the contents of cell (row, col)
     function writeTable(source, t, row, col) {
       const { lines, starts } = layoutTable(t.rows);
-      source.setRangeText(lines.join('\n'), t.start, t.end, 'end');
+      source._snippetStops = null;
+      editText(source, t.start, t.end, lines.join('\n'));
       let from = t.start + starts[col];
       for (let r = 0; r < row; r++) from += lines[r].length + 1;
       source.setSelectionRange(from, from + t.rows[row][col].length);
-      source._snippetStops = null;
-      source.dispatchEvent(new Event('input', { bubbles: true }));
       autoGrow(source);
     }
 
@@ -2865,9 +3098,8 @@
       if (t.row >= 2 && t.row === t.rows.length - 1 && t.rows[t.row].every(c => !c)) {
         t.rows.pop();
         const text = layoutTable(t.rows).lines.join('\n') + '\n';
-        source.setRangeText(text, t.start, t.end, 'end');
         source._snippetStops = null;
-        source.dispatchEvent(new Event('input', { bubbles: true }));
+        editText(source, t.start, t.end, text);
         autoGrow(source);
         return true;
       }
@@ -2907,8 +3139,7 @@
       const m = /^\s*(ggb|geo)$/.exec(value.slice(lineStart, pos));
       if (!m || !/^[^\S\n]*(\n|$)/.test(value.slice(pos))) return false;
       if (isMathMode(value.slice(0, pos)) || inCodeFence(value.slice(0, pos))) return false;
-      source.setRangeText('', lineStart, pos, 'end');
-      source.dispatchEvent(new Event('input', { bubbles: true }));
+      editText(source, lineStart, pos, '');
       openGeoGebra(source, GGB_TRIGGERS[m[1]]);
       return true;
     }
@@ -3122,11 +3353,12 @@
         if (moveSnippetTab(source) || expandTemplate(source) || expandTable(source) || expandGeoGebra(source) ||
           expandSnippet(source, false) ||
           tableTab(source, false) || tabOut(source)) return true;
-        source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
-        source.dispatchEvent(new Event('input', { bubbles: true }));
+        editText(source, source.selectionStart, source.selectionEnd, '  ');
         return true;
       }
-      if (e.altKey || e.ctrlKey || e.metaKey) return false;
+      // not Alt: on a German Mac keyboard {, [ and \ are typed with ⌥
+      if (e.ctrlKey || e.metaKey) return false;
+      if (e.key === '$' && isTexSource(source) && texDollar(source)) { e.preventDefault(); return true; }
       if (e.key === '/' && autoFraction(source)) { e.preventDefault(); return true; }
       if (PAIRS[e.key] && autoPair(source, e.key)) { e.preventDefault(); return true; }
       if (Object.values(PAIRS).includes(e.key) && typeOverPair(source, e.key)) { e.preventDefault(); return true; }
@@ -3653,6 +3885,10 @@
     // The caret's vertical position in a textarea, in viewport pixels —
     // measured on an invisible copy with the same text layout
     function caretClientY(ta, pos) {
+      return caretClientRect(ta, pos).top;
+    }
+
+    function caretClientRect(ta, pos) {
       const cs = getComputedStyle(ta), copy = document.createElement('div');
       for (const p of ['boxSizing', 'width', 'padding', 'border', 'font', 'letterSpacing',
         'lineHeight', 'tabSize', 'textIndent', 'textTransform', 'wordSpacing'])
@@ -3665,9 +3901,11 @@
       const mark = document.createElement('span'); mark.textContent = '​';
       copy.appendChild(mark);
       document.body.appendChild(copy);
-      const y = ta.getBoundingClientRect().top + mark.offsetTop - ta.scrollTop;
+      const box = ta.getBoundingClientRect();
+      const top = box.top + mark.offsetTop - ta.scrollTop;
+      const rect = { top, left: box.left + mark.offsetLeft - ta.scrollLeft, bottom: top + mark.offsetHeight };
       copy.remove();
-      return y;
+      return rect;
     }
 
     // Scroll whatever holds `el` by `dy` pixels
@@ -3902,7 +4140,17 @@
       const rendered = document.createElement('div');
       rendered.className = 'note-render notefile-render';
       const gutter = document.createElement('div'); gutter.className = 'tex-gutter';
-      notePage.append(gutter, src, rendered);
+      // for .tex: search marks and coloured text under the (transparent) editor
+      const srcWrap = document.createElement('div'); srcWrap.className = 'src-wrap';
+      const marks = document.createElement('pre'); marks.className = 'tex-layer tex-marks';
+      const hl = document.createElement('pre'); hl.className = 'tex-layer tex-hl';
+      const find = document.createElement('div'); find.className = 'tex-find'; find.hidden = true;
+      find.innerHTML = '<input class="q" placeholder="Find" spellcheck="false"><span class="count"></span>' +
+        '<button class="prev" title="Previous (⇧↩)">↑</button><button class="next" title="Next (↩)">↓</button>' +
+        '<button class="case" title="Match case">Aa</button><button class="close" title="Close (Esc)">×</button>' +
+        '<input class="r replace" placeholder="Replace" spellcheck="false"><button class="one">Replace</button><button class="all">All</button>';
+      srcWrap.append(marks, hl, src, find);
+      notePage.append(gutter, srcWrap, rendered);
       // a .tex file's compiled PDF, right next to its source
       const preview = document.createElement('div'); preview.className = 'tex-preview'; preview.hidden = true;
       const texStatus = document.createElement('div'); texStatus.className = 'tex-status';
@@ -3915,8 +4163,10 @@
       empty.innerHTML = '<strong>No file open</strong><span>Click a file in the sidebar</span>';
       paneSurface.append(pages, note, empty);
       el.append(tabbar, paneSurface);
-      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty, preview, texStatus, texPages, tex: null, gutter });
-      src.addEventListener('scroll', () => { gutter.scrollTop = src.scrollTop; });
+      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty, preview, texStatus, texPages, tex: null, gutter, hl, marks, find });
+      src.addEventListener('scroll', () => { gutter.scrollTop = hl.scrollTop = marks.scrollTop = src.scrollTop; });
+      initTexFind(pane);
+      preview.addEventListener('dblclick', e => syncFromPdf(pane, e));
       for (const ev of ['keyup', 'mouseup', 'focus']) src.addEventListener(ev, () => markGutterLine(pane));
       new ResizeObserver(() => scheduleGutter(pane)).observe(src);
       texStatus.addEventListener('click', () => jumpToTexError(pane));
@@ -4149,6 +4399,8 @@
         paintGutter(pane);
         pane.src.scrollTop = tab.scrollTop || 0;
         showTexPreview(pane, tab.path);
+        hideCompletion();
+        lspSync(pane);
       } else {
         renderMarkdown(pane.src.value, pane.rendered);
         pane.src.hidden = true; pane.rendered.hidden = false;
@@ -4469,11 +4721,19 @@
       gutterMirror.innerHTML = lines.map(l => '<div>' + (escapeHtml(l) || '\u200b') + '</div>').join('');
       const rows = gutterMirror.children, top = parseFloat(cs.paddingTop);
       const lineHeight = parseFloat(cs.lineHeight) || 20;
-      const errors = pane.texErrorLines || new Set();
+      // problems by line: the last compile's errors, then the language server's
+      const problems = new Map();
+      const note = (line, cls, message) => {
+        const had = problems.get(line);
+        problems.set(line, { cls: had && had.cls === 'error' ? 'error' : cls, title: (had ? had.title + '\n' : '') + message });
+      };
+      for (const [line, message] of pane.texErrorLines || []) note(line, 'error', message);
+      for (const d of lspDiagnostics.get(pane.note.dataset.doc) || []) note(d.line + 1, d.severity === 1 ? 'error' : 'warn', d.message);
       let html = '';
       for (let i = 0; i < rows.length; i++) {
+        const p = problems.get(i + 1);
         html += `<span style="top:${rows[i].offsetTop + top}px;line-height:${lineHeight}px"` +
-          (errors.has(i + 1) ? ' class="error"' : '') + `>${i + 1}</span>`;
+          (p ? ` class="${p.cls}" title="${escapeHtml(p.title).replace(/"/g, '&quot;')}"` : '') + `>${i + 1}</span>`;
       }
       // a spacer as tall as the text, so the gutter can scroll as far as the editor
       html += `<div style="height:${gutterMirror.offsetHeight + top + parseFloat(cs.paddingBottom) + ta.clientHeight}px"></div>`;
@@ -4481,8 +4741,234 @@
       pane.gutter.style.width = String(lines.length).length + 'ch';
       pane.gutter.innerHTML = html;
       pane.gutter.scrollTop = ta.scrollTop;
+      paintTexLayers(pane);
       pane.gutterLine = -1;
       markGutterLine(pane);
+    }
+
+    // Syntax colours for the layer under the editor: commands, environment
+    // names, math (with its delimiters), braces and comments
+    const TEX_TOKEN = /(%[^\n]*)|(\\(?:begin|end))(\{)([^{}\n]*)(\})|(\\[a-zA-Z@]+\*?|\\[^\n])|(\$\$|\$)|([{}\[\]])|([^%\\${}\[\]]+)|([\s\S])/gy;
+    const TEX_MATH_ENV = /^(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|math)\*?$/;
+    function highlightTex(text) {
+      let out = '', math = null, m;
+      const span = (cls, str) => `<span class="${cls}${math && cls !== 'td' ? ' m' : ''}">${escapeHtml(str)}</span>`;
+      TEX_TOKEN.lastIndex = 0;
+      while ((m = TEX_TOKEN.exec(text))) {
+        if (m[1]) out += `<span class="tc">${escapeHtml(m[1])}</span>`;
+        else if (m[2]) {
+          const env = m[4], mathEnv = TEX_MATH_ENV.test(env);
+          if (m[2] === '\\end' && math === 'env:' + env) math = null;
+          out += span('tk', m[2]) + span('tb', '{') + span('te', env) + span('tb', '}');
+          if (m[2] === '\\begin' && mathEnv && !math) math = 'env:' + env;
+        } else if (m[6]) {
+          const t = m[6];
+          if (!math && (t === '\\[' || t === '\\(')) { math = t === '\\[' ? '\\]' : '\\)'; out += span('td', t); }
+          else if (math && t === math) { out += span('td', t); math = null; }
+          else out += span('tk', t);
+        } else if (m[7]) {
+          const t = m[7];
+          if (!math) { math = t; out += span('td', t); }
+          else if (math === t) { out += span('td', t); math = null; }
+          else out += span('td', t);
+        } else if (m[8]) out += span('tb', m[8]);
+        else out += math ? span('', m[9] || m[10]) : escapeHtml(m[9] || m[10]);
+      }
+      return out + '\u200b'; // gives a trailing empty line its height
+    }
+
+    function paintTexLayers(pane) {
+      const ta = pane.src, width = ta.clientWidth + 'px';
+      pane.hl.style.width = pane.marks.style.width = width;
+      pane.hl.innerHTML = highlightTex(ta.value);
+      paintFindMarks(pane);
+      pane.hl.scrollTop = pane.marks.scrollTop = ta.scrollTop;
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  find & replace in a .tex file — ⌘F, as in Overleaf
+     * ------------------------------------------------------------------ */
+    function initTexFind(pane) {
+      const bar = pane.find, q = bar.querySelector('.q'), r = bar.querySelector('.r');
+      pane.findState = { matches: [], index: -1, caseSensitive: false };
+      const close = () => { bar.hidden = true; pane.findState.matches = []; paintFindMarks(pane); pane.src.focus(); };
+      q.addEventListener('input', () => { findMatches(pane, true); });
+      q.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); stepFind(pane, e.shiftKey ? -1 : 1); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+      });
+      r.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); replaceFind(pane, false); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+      });
+      bar.querySelector('.next').onclick = () => stepFind(pane, 1);
+      bar.querySelector('.prev').onclick = () => stepFind(pane, -1);
+      bar.querySelector('.close').onclick = close;
+      bar.querySelector('.one').onclick = () => replaceFind(pane, false);
+      bar.querySelector('.all').onclick = () => replaceFind(pane, true);
+      bar.querySelector('.case').onclick = e => {
+        pane.findState.caseSensitive = !pane.findState.caseSensitive;
+        e.target.classList.toggle('on', pane.findState.caseSensitive);
+        findMatches(pane, true);
+      };
+    }
+
+    function openTexFind(pane) {
+      const ta = pane.src, q = pane.find.querySelector('.q');
+      const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+      if (sel && !sel.includes('\n')) q.value = sel;
+      pane.find.hidden = false;
+      q.focus(); q.select();
+      findMatches(pane, true);
+    }
+
+    function findMatches(pane, jump) {
+      const st = pane.findState, query = pane.find.querySelector('.q').value, text = pane.src.value;
+      st.matches = [];
+      if (query && !pane.find.hidden) {
+        const hay = st.caseSensitive ? text : text.toLowerCase(), needle = st.caseSensitive ? query : query.toLowerCase();
+        for (let at = hay.indexOf(needle); at >= 0 && st.matches.length < 5000; at = hay.indexOf(needle, at + needle.length))
+          st.matches.push(at);
+      }
+      const caret = pane.src.selectionStart;
+      st.index = st.matches.length ? Math.max(0, st.matches.findIndex(at => at >= caret)) : -1;
+      if (jump && st.index >= 0) showFindMatch(pane);
+      paintFindMarks(pane);
+    }
+
+    function stepFind(pane, dir) {
+      const st = pane.findState;
+      if (!st.matches.length) return;
+      st.index = (st.index + dir + st.matches.length) % st.matches.length;
+      showFindMatch(pane);
+      paintFindMarks(pane);
+    }
+
+    function showFindMatch(pane) {
+      const st = pane.findState, ta = pane.src, len = pane.find.querySelector('.q').value.length;
+      const at = st.matches[st.index];
+      ta.setSelectionRange(at, at + len);
+      const y = caretClientY(ta, at) - ta.getBoundingClientRect().top;
+      if (y < 0 || y > ta.clientHeight - 30) ta.scrollTop += y - ta.clientHeight / 3;
+      markGutterLine(pane);
+    }
+
+    function replaceFind(pane, all) {
+      const st = pane.findState, ta = pane.src, query = pane.find.querySelector('.q').value;
+      const replacement = pane.find.querySelector('.r').value, field = document.activeElement;
+      if (!st.matches.length || !query) return;
+      ta.focus(); // so the change lands in the editor's undo history
+      if (all) {
+        const first = st.matches[0], last = st.matches[st.matches.length - 1] + query.length;
+        let out = '', from = first;
+        for (const at of st.matches) { out += ta.value.slice(from, at) + replacement; from = at + query.length; }
+        editText(ta, first, last, out);
+        toast(`Replaced ${st.matches.length}`);
+      } else {
+        const at = st.matches[st.index];
+        editText(ta, at, at + query.length, replacement);
+        ta.setSelectionRange(at + replacement.length, at + replacement.length);
+      }
+      findMatches(pane, !all);
+      if (field && field.closest('.tex-find')) field.focus();
+    }
+
+    function paintFindMarks(pane) {
+      const st = pane.findState, text = pane.src.value;
+      if (!st || !st.matches.length || pane.find.hidden) { pane.marks.innerHTML = ''; paintFindCount(pane); return; }
+      const len = pane.find.querySelector('.q').value.length;
+      let out = '', from = 0;
+      st.matches.forEach((at, i) => {
+        out += escapeHtml(text.slice(from, at)) + `<mark${i === st.index ? ' class="current"' : ''}>${escapeHtml(text.slice(at, at + len))}</mark>`;
+        from = at + len;
+      });
+      pane.marks.innerHTML = out + escapeHtml(text.slice(from)) + '\u200b';
+      pane.marks.scrollTop = pane.src.scrollTop;
+      paintFindCount(pane);
+    }
+
+    function paintFindCount(pane) {
+      const st = pane.findState, q = pane.find.querySelector('.q').value;
+      pane.find.querySelector('.count').textContent = !q ? '' : st.matches.length ? `${st.index + 1} of ${st.matches.length}` : 'no results';
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  Overleaf's editing keys in a .tex file
+     * ------------------------------------------------------------------ */
+    function texEditorKey(pane, e) {
+      const ta = pane.src, mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.key === 'Enter') { compileTexNow(); return true; }                          // recompile
+      if (mod && !e.altKey && e.key.toLowerCase() === 'f') { openTexFind(pane); return true; }  // find in this file
+      if (mod && (e.key === '/' || e.code === 'Slash')) { toggleTexComment(ta); return true; }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'b') { wrapSelection(ta, '\\textbf{', '}'); return true; }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'i') { wrapSelection(ta, '\\textit{', '}'); return true; }
+      if (mod && e.altKey && e.code === 'KeyJ') { syncToPdf(pane); return true; }              // where is this line in the PDF?
+      if (e.key === 'Enter' && !mod && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+        // keep the indentation, and indent one step inside a fresh \begin{…}
+        const start = ta.selectionStart, line = ta.value.slice(ta.value.lastIndexOf('\n', start - 1) + 1, start);
+        let indent = /^[ \t]*/.exec(line)[0];
+        if (/\\begin\{(?!document\})[^}]*\}/.test(line) && !/\\end\{/.test(line)) indent += '  ';
+        editText(ta, start, ta.selectionEnd, '\n' + indent);
+        return true;
+      }
+      return false;
+    }
+
+    function wrapSelection(ta, before, after) {
+      const start = ta.selectionStart, end = ta.selectionEnd, sel = ta.value.slice(start, end);
+      skipCompletion = true;
+      editText(ta, start, end, before + sel + after);
+      ta.setSelectionRange(start + before.length, start + before.length + sel.length);
+    }
+
+    // ⌘/ comments the selected lines out with %, or back in when they all are
+    function toggleTexComment(ta) {
+      const v = ta.value, selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+      const from = v.lastIndexOf('\n', selStart - 1) + 1;
+      let to = v.indexOf('\n', selEnd > selStart && v[selEnd - 1] === '\n' ? selEnd - 1 : selEnd);
+      if (to < 0) to = v.length;
+      const lines = v.slice(from, to).split('\n');
+      const off = lines.filter(l => l.trim()).every(l => /^\s*%/.test(l));
+      const out = lines.map(l => !l.trim() ? l : off ? l.replace(/^(\s*)% ?/, '$1') : l.replace(/^(\s*)/, '$1% ')).join('\n');
+      editText(ta, from, to, out);
+      if (selStart === selEnd) {
+        const caret = Math.max(from, selStart + (off ? -(lines[0].length - out.split('\n')[0].length) : 2));
+        ta.setSelectionRange(caret, caret);
+      } else ta.setSelectionRange(from, from + out.length);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  SyncTeX — double-click the PDF to land on that line of source;
+     *  ⌘⌥J shows where the caret's line ended up in the PDF
+     * ------------------------------------------------------------------ */
+    async function syncFromPdf(pane, e) {
+      const pageEl = e.target.closest('.tex-page');
+      if (!pageEl || !pane.tex || !pane.texPageList) return;
+      const p = pane.texPageList[+pageEl.dataset.i], r = pageEl.getBoundingClientRect();
+      const hit = await window.margin.synctexEdit(pane.tex.pdf, +pageEl.dataset.i + 1,
+        (e.clientX - r.left) / p.scale, (e.clientY - r.top) / p.scale);
+      if (!hit) { toast('No source found for that spot — compile once more'); return; }
+      if (hit.path !== pane.note.dataset.doc) {
+        if (!isTexPath(hit.path)) { toast(`From ${hit.path.split('/').pop()}, line ${hit.line}`); return; }
+        await openNoteFile(hit.path);
+      }
+      revealTexLine(focusedPane, hit.line - 1, null);
+    }
+
+    async function syncToPdf(pane) {
+      if (!pane.tex || !pane.texPageList) return;
+      const ta = pane.src, { line, character } = toPosition(ta.value, ta.selectionStart);
+      const box = await window.margin.synctexView(pane.note.dataset.doc, line + 1, character + 1, pane.tex.pdf);
+      const p = box && pane.texPageList[box.page - 1];
+      if (!p) { toast('Not in the PDF yet — compile first'); return; }
+      const mark = document.createElement('div'); mark.className = 'tex-sync';
+      Object.assign(mark.style, {
+        left: (box.h - 2) * p.scale + 'px', top: (box.v - box.H - 2) * p.scale + 'px',
+        width: (box.W + 4) * p.scale + 'px', height: (box.H + 4) * p.scale + 'px'
+      });
+      p.el.appendChild(mark);
+      setTimeout(() => mark.remove(), 1700);
+      pane.preview.scrollTop = p.el.offsetTop + (box.v - box.H) * p.scale - pane.preview.clientHeight / 3;
     }
 
     // the caret's line number stands out, like Vim's CursorLineNr
@@ -4554,7 +5040,7 @@
       const el = pane.texStatus;
       el.classList.toggle('error', !!(res && res.errors && res.errors.length));
       pane.texError = null;
-      const errorLines = new Set((res && res.errors || []).filter(e => e.line && e.file === pane.tex.path).map(e => e.line));
+      const errorLines = new Map((res && res.errors || []).filter(e => e.line && e.file === pane.tex.path).map(e => [e.line, e.message]));
       if (String([...errorLines]) !== String([...(pane.texErrorLines || [])])) { pane.texErrorLines = errorLines; scheduleGutter(pane); }
       if (!res) { el.textContent = 'LaTeX'; return; }
       if (res.running) { el.textContent = 'Compiling…'; return; }
@@ -4574,12 +5060,231 @@
     function jumpToTexError(pane) {
       const err = pane.texError;
       if (!err || !err.line || (err.file && err.file !== pane.tex.path)) return;
+      revealTexLine(pane, err.line - 1, null);
+    }
+
+    // line is 0-based; character null selects the whole line
+    function revealTexLine(pane, line, character) {
       const src = pane.src, lines = src.value.split('\n');
-      const at = lines.slice(0, err.line - 1).reduce((n, l) => n + l.length + 1, 0);
+      const at = lines.slice(0, line).reduce((n, l) => n + l.length + 1, 0);
       focusPane(pane);
       src.focus();
-      src.setSelectionRange(at, at + (lines[err.line - 1] || '').length);
+      if (character == null) src.setSelectionRange(at, at + (lines[line] || '').length);
+      else src.setSelectionRange(at + character, at + character);
       src.scrollTop += caretClientY(src, at) - (src.getBoundingClientRect().top + src.clientHeight / 3);
+      markGutterLine(pane);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  LaTeX language server (TexLab) — completion while typing, after a
+     *  backslash and inside \ref{ \cite{ \begin{ \usepackage{ …; problems
+     *  in the line numbers; ⌘-click or F12 jumps to a \label or definition
+     * ------------------------------------------------------------------ */
+    const lspDiagnostics = new Map(); // file -> [{ line, severity, message }]
+    const toPosition = (text, offset) => {
+      const before = text.slice(0, offset);
+      return { line: before.split('\n').length - 1, character: offset - before.lastIndexOf('\n') - 1 };
+    };
+    const toOffset = (text, { line, character }) => {
+      let at = 0;
+      for (let i = 0; i < line; i++) { const nl = text.indexOf('\n', at); if (nl < 0) return text.length; at = nl + 1; }
+      return Math.min(at + character, text.length);
+    };
+
+    function lspSync(pane) {
+      const path = pane.note.dataset.doc;
+      if (!hasShell || !isTexPath(path)) return Promise.resolve();
+      return window.margin.lspSync(path, pane.src.value);
+    }
+    let lspSyncTimer = null;
+    function scheduleLspSync(pane) {
+      clearTimeout(lspSyncTimer);
+      lspSyncTimer = setTimeout(() => lspSync(pane), 250);
+    }
+
+    if (hasShell) window.margin.onLspDiagnostics(({ path, diagnostics }) => {
+      lspDiagnostics.set(path, diagnostics.filter(d => d.severity <= 2)); // errors and warnings, not hints
+      for (const pane of panes) if (pane.note.dataset.doc === path) scheduleGutter(pane);
+    });
+
+    // commands whose {argument} the server can complete
+    const LSP_ARGUMENT = /\\(?:[a-zA-Z]*ref|[a-zA-Z]*cite[a-zA-Z]*|begin|end|usepackage|RequirePackage|documentclass|input|include|includegraphics|subfile|bibliography|addbibresource|import|subimport)\*?(?:\[[^\]\n]*\])*\{[^{}\n]*$/;
+    const LSP_COMMAND = /(?:^|[^\\])\\[a-zA-Z@]*$/;
+
+    // What Overleaf knows and TexLab doesn't: which commands take arguments
+    // (accepting \frac gives \frac{|}{} with Tab to the next one) and which
+    // ones people actually use, so \textb offers \textbf before \textbackslash.
+    const TEX_ARGS = {
+      part: 1, chapter: 1, section: 1, subsection: 1, subsubsection: 1, paragraph: 1,
+      'chapter*': 1, 'section*': 1, 'subsection*': 1, 'subsubsection*': 1,
+      textbf: 1, textit: 1, emph: 1, underline: 1, texttt: 1, textsc: 1, textrm: 1, textsf: 1, text: 1,
+      label: 1, ref: 1, eqref: 1, pageref: 1, autoref: 1, cref: 1, Cref: 1, cite: 1, citep: 1, citet: 1,
+      footnote: 1, url: 1, href: 2, caption: 1, title: 1, author: 1, date: 1,
+      usepackage: 1, documentclass: 1, input: 1, include: 1, includegraphics: 1, bibliography: 1,
+      bibliographystyle: 1, addbibresource: 1, begin: 1, end: 1,
+      frac: 2, dfrac: 2, tfrac: 2, binom: 2, sqrt: 1, mathbb: 1, mathcal: 1, mathbf: 1, mathrm: 1,
+      mathfrak: 1, mathscr: 1, mathsf: 1, mathit: 1, operatorname: 1, boldsymbol: 1, overline: 1,
+      hat: 1, bar: 1, vec: 1, tilde: 1, widehat: 1, widetilde: 1, dot: 1, ddot: 1, boxed: 1,
+      overbrace: 1, underbrace: 1, overset: 2, underset: 2, stackrel: 2, xrightarrow: 1,
+      newcommand: 2, renewcommand: 2, DeclareMathOperator: 2, newtheorem: 2, newenvironment: 3,
+      textcolor: 2, colorbox: 2, fbox: 1, mbox: 1, hspace: 1, vspace: 1, phantom: 1, intertext: 1
+    };
+    const TEX_POPULAR = [...Object.keys(TEX_ARGS),
+      'item', 'maketitle', 'tableofcontents', 'newpage', 'noindent', 'centering', 'hline', 'quad', 'qquad',
+      'left', 'right', 'cdot', 'cdots', 'ldots', 'dots', 'times', 'infty', 'partial', 'nabla', 'sum', 'prod',
+      'int', 'iint', 'oint', 'lim', 'limsup', 'liminf', 'sup', 'inf', 'max', 'min', 'log', 'ln', 'exp', 'sin',
+      'cos', 'tan', 'det', 'dim', 'ker', 'in', 'notin', 'subset', 'subseteq', 'supset', 'cup', 'cap',
+      'setminus', 'emptyset', 'forall', 'exists', 'to', 'mapsto', 'implies', 'iff', 'Rightarrow', 'Leftarrow',
+      'rightarrow', 'leftarrow', 'leq', 'geq', 'neq', 'approx', 'equiv', 'sim', 'cong', 'pm', 'circ',
+      'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'lambda', 'mu',
+      'nu', 'xi', 'pi', 'rho', 'sigma', 'tau', 'phi', 'varphi', 'chi', 'psi', 'omega', 'Gamma', 'Delta',
+      'Theta', 'Lambda', 'Sigma', 'Phi', 'Psi', 'Omega', 'langle', 'rangle', 'lvert', 'rvert', 'mid',
+      'small', 'large', 'Large', 'footnotesize', 'bigskip', 'medskip', 'smallskip', 'linewidth', 'textwidth'];
+    const TEX_RANK = new Map(TEX_POPULAR.map((name, i) => [name, i]));
+
+    // \newcommand{\foo}[2] in the file itself takes two arguments too
+    function texArity(text, name) {
+      if (TEX_ARGS[name]) return TEX_ARGS[name];
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = new RegExp(`\\\\(?:re)?newcommand\\*?\\s*\\{?\\\\${esc}\\}?\\s*\\[(\\d)\\]`).exec(text);
+      return m ? +m[1] : 0;
+    }
+
+    const completeEl = document.createElement('div');
+    completeEl.id = 'lsp-complete'; completeEl.hidden = true;
+    completeEl.addEventListener('mousedown', e => e.preventDefault()); // keep the editor focused
+    document.body.appendChild(completeEl);
+    let completion = null, completionSeq = 0, skipCompletion = false;
+
+    function completionContext(ta) {
+      const pos = ta.selectionStart;
+      if (pos !== ta.selectionEnd) return null;
+      const line = ta.value.slice(ta.value.lastIndexOf('\n', pos - 1) + 1, pos);
+      if (/(^|[^\\])%/.test(line)) return null; // inside a comment
+      if (LSP_COMMAND.test(line)) return 'command';
+      if (LSP_ARGUMENT.test(line)) return 'argument';
+      return null;
+    }
+
+    async function requestCompletion(pane) {
+      const ta = pane.src, kind = completionContext(ta);
+      if (!kind) { hideCompletion(); scheduleLspSync(pane); return; }
+      const seq = ++completionSeq;
+      await lspSync(pane);
+      const { line, character } = toPosition(ta.value, ta.selectionStart);
+      let items = await window.margin.lspCompletion(pane.note.dataset.doc, line, character);
+      if (seq !== completionSeq || document.activeElement !== ta) return;
+      const word = kind === 'command' ? /[a-zA-Z@]*$/.exec(ta.value.slice(0, ta.selectionStart))[0] : '';
+      if (kind === 'command') {
+        const score = item => (item.label.startsWith(word) ? 0 : 2000) + (TEX_RANK.has(item.label) ? TEX_RANK.get(item.label) : 1000);
+        items = items.map((item, i) => ({ item, i })).sort((a, b) => score(a.item) - score(b.item) || a.i - b.i).map(x => x.item);
+      }
+      if (!items.length) { hideCompletion(); return; }
+      completion = { pane, items, kind, word, index: 0 };
+      paintCompletion();
+    }
+
+    function paintCompletion() {
+      const { pane, items, kind, index } = completion;
+      completeEl.innerHTML = '';
+      items.forEach((item, i) => {
+        const row = document.createElement('div');
+        row.className = 'item' + (i === index ? ' active' : '');
+        const label = document.createElement('span'); label.textContent = (kind === 'command' ? '\\' : '') + item.label;
+        const detail = document.createElement('span'); detail.className = 'detail'; detail.textContent = item.detail || '';
+        row.append(label, detail);
+        row.addEventListener('click', () => { completion.index = i; acceptCompletion(); });
+        completeEl.appendChild(row);
+      });
+      completeEl.hidden = false;
+      const at = caretClientRect(pane.src, pane.src.selectionStart);
+      const h = completeEl.offsetHeight, w = completeEl.offsetWidth;
+      const below = at.bottom + 4 + h < window.innerHeight;
+      completeEl.style.top = (below ? at.bottom + 4 : at.top - h - 4) + 'px';
+      completeEl.style.left = Math.min(at.left, window.innerWidth - w - 8) + 'px';
+      completeEl.children[index].scrollIntoView({ block: 'nearest' });
+    }
+
+    function hideCompletion() {
+      completion = null;
+      completeEl.hidden = true;
+    }
+
+    // Accept the highlighted entry. \begin{name also gets its } and, unless it
+    // is already closed further down, an \end{name} with the caret between.
+    function acceptCompletion() {
+      const { pane, items, index, kind } = completion;
+      const item = items[index], ta = pane.src;
+      hideCompletion();
+      let from, to, text = item.edit ? item.edit.text : item.insert;
+      if (item.edit) { from = toOffset(ta.value, item.edit.start); to = toOffset(ta.value, item.edit.end); }
+      else { to = ta.selectionStart; from = to - /[a-zA-Z@:*._-]*$/.exec(ta.value.slice(0, to))[0].length; }
+      let caret = from + text.length;
+      const lineBefore = ta.value.slice(ta.value.lastIndexOf('\n', from - 1) + 1, from) + text;
+      const next = ta.value[to] || '';
+      if (kind === 'argument') {
+        // close the brace; \begin{name} also gets its \end{name}, unless it is closed further down
+        let tail = next === '}' ? '' : '}';
+        const env = /\\begin\{([^{}\n]*)$/.exec(lineBefore);
+        if (env) {
+          const name = env[1], rest = ta.value.slice(to + (next === '}' ? 1 : 0));
+          const end = rest.indexOf(`\\end{${name}}`), again = rest.indexOf(`\\begin{${name}}`);
+          if (end < 0 || (again >= 0 && again < end)) {
+            const indent = /^[ \t]*/.exec(lineBefore)[0];
+            insertSnippet(ta, from, to + (next === '}' ? 1 : 0), `${text}}\n${indent}  $0\n${indent}\\end{${name}}`);
+            return;
+          }
+        }
+        skipCompletion = true;
+        editText(ta, from, to, text + tail);
+        caret += 1;
+        ta.setSelectionRange(caret, caret);
+        return;
+      }
+      // a command: its arguments become Tab stops, unless they are already typed
+      const arity = /^[{[]/.test(next) ? 0 : texArity(ta.value, text);
+      if (text === 'begin' || text === 'end') {
+        editText(ta, from, to, text + '{}');      // and the list of environments opens
+        ta.setSelectionRange(caret + 1, caret + 1);
+        requestCompletion(pane);
+        return;
+      }
+      if (arity) insertSnippet(ta, from, to, text + Array.from({ length: arity }, (_, i) => `{$${i}}`).join(''));
+      else { skipCompletion = true; editText(ta, from, to, text); ta.setSelectionRange(caret, caret); }
+    }
+
+    // the editor's keys while the list is open
+    function completionKey(e) {
+      if (!completion || completeEl.hidden) return false;
+      const n = completion.items.length;
+      if (e.key === 'ArrowDown') completion.index = (completion.index + 1) % n;
+      else if (e.key === 'ArrowUp') completion.index = (completion.index - 1 + n) % n;
+      else if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+        const item = completion.items[completion.index], ta = completion.pane.src;
+        const done = completion.kind === 'command' && item.label === completion.word &&
+          (e.key === 'Enter' || !texArity(ta.value, item.label) || /^[{[]/.test(ta.value[ta.selectionStart] || ''));
+        if (done) { hideCompletion(); return false; }
+        acceptCompletion(); e.preventDefault(); return true;
+      }
+      else if (e.key === 'Escape') hideCompletion();
+      else return false;
+      if (completion) paintCompletion();
+      e.preventDefault();
+      return true;
+    }
+
+    async function goToDefinition(pane) {
+      const ta = pane.src, path = pane.note.dataset.doc;
+      if (!hasShell || !isTexPath(path)) return;
+      await lspSync(pane);
+      const { line, character } = toPosition(ta.value, ta.selectionStart);
+      const [loc] = await window.margin.lspDefinition(path, line, character);
+      if (!loc) { toast('No definition found here'); return; }
+      if (loc.path !== path) {
+        if (!isTexPath(loc.path)) { toast(`Defined in ${loc.path.split('/').pop()}, line ${loc.line + 1}`); return; }
+        await openNoteFile(loc.path);
+      }
+      revealTexLine(focusedPane, loc.line, loc.character);
     }
 
     async function loadTexPdf(pane, mtime) {
@@ -4624,6 +5329,7 @@
       if (pane.tex !== t || t.doc !== doc) return;
       pane.texPages.replaceWith(host);
       pane.texPages = host;
+      pane.texPageList = pages;
       pane.preview.scrollTop = scrollTop;
       pane.texWidth = width;
       if (pane.texIo) pane.texIo.disconnect();
@@ -4666,10 +5372,24 @@
       source.addEventListener('input', () => {
         updateSnippetStops(source); autoGrow(source);
         scheduleGutter(pane);
+        if (!pane.find.hidden) findMatches(pane, false);
+        if (pane.note.classList.contains('tex')) {
+          if (skipCompletion) { skipCompletion = false; scheduleLspSync(pane); } else requestCompletion(pane);
+        }
         if (focusedPane === pane) scheduleNoteSave();
+      });
+      source.addEventListener('blur', hideCompletion);
+      source.addEventListener('scroll', hideCompletion);
+      source.addEventListener('mouseup', e => {
+        if (pane.note.classList.contains('tex') && (isMac ? e.metaKey : e.ctrlKey)) goToDefinition(pane);
+        else if (completion && !completionContext(source)) hideCompletion();
       });
       source.addEventListener('blur', finish);
       source.addEventListener('keydown', e => {
+        if (completionKey(e)) return;
+        if (e.key === 'F12' && pane.note.classList.contains('tex')) { e.preventDefault(); goToDefinition(pane); return; }
+        if (pane.note.classList.contains('tex') && texEditorKey(pane, e)) { e.preventDefault(); e.stopPropagation(); return; }
+        if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) hideCompletion();
         if (handleMathKey(source, e)) return;
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -5622,7 +6342,8 @@
         e.target.id === 'notefile-src';
       const mod = e.ctrlKey || e.metaKey;
 
-      if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openSearch(); return; }
+      // in a .tex file ⌘F finds in that file, as in Overleaf; everywhere else it searches the folder
+      if (mod && e.key.toLowerCase() === 'f' && !e.target.closest?.('.pane-note.tex')) { e.preventDefault(); openSearch(); return; }
       if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
       if (mod && e.key === '\\') { e.preventDefault(); splitPane(); return; }
       if (mod && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {

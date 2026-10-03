@@ -26,6 +26,13 @@ contextBridge.exposeInMainWorld('margin', {
   texTemplate:   name => ipcRenderer.invoke('tex-template', name),
   texTemplates:  ()   => ipcRenderer.invoke('tex-templates'),
   openTemplates: ()   => ipcRenderer.invoke('open-templates'),
+  // the LaTeX language server (TexLab)
+  lspSync:       (p, text)       => ipcRenderer.invoke('lsp-sync', p, text),
+  lspCompletion: (p, line, ch)   => ipcRenderer.invoke('lsp-completion', p, line, ch),
+  lspDefinition: (p, line, ch)   => ipcRenderer.invoke('lsp-definition', p, line, ch),
+  onLspDiagnostics: cb => ipcRenderer.on('lsp-diagnostics', (_e, d) => cb(d)),
+  synctexView:   (tex, line, col, pdf) => ipcRenderer.invoke('synctex-view', tex, line, col, pdf),
+  synctexEdit:   (pdf, page, x, y)     => ipcRenderer.invoke('synctex-edit', pdf, page, x, y),
 
   // search
   walkDir:      root          => ipcRenderer.invoke('walk-dir', root),

@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const { pathToFileURL, fileURLToPath } = require('url');
 
 // Notes live next to the PDF: lecture.pdf -> lecture.margin.json
 const sidecar = p => p.replace(/\.pdf$/i, '') + '.margin.json';
@@ -393,3 +394,139 @@ ipcMain.handle('tex-templates', async () => {
 });
 
 ipcMain.handle('open-templates', async () => shell.openPath(await ensureTemplates()));
+
+// ---- LaTeX language server: TexLab, spoken to over stdio (LSP) ----
+// Completion, diagnostics and go-to-definition for .tex files. Started the
+// first time a .tex file opens; restarted on the next request if it dies.
+
+function texlabBinary() {
+  // a binary can't run from inside app.asar, so the build unpacks it beside it
+  const bundled = path.join(__dirname, 'vendor', 'texlab', 'texlab').replace('app.asar', 'app.asar.unpacked');
+  return require('fs').existsSync(bundled) ? bundled : 'texlab'; // else PATH (brew install texlab)
+}
+
+let lsp = null;
+
+function startLsp(root) {
+  const proc = spawn(texlabBinary(), [], { env: { ...process.env, PATH: TEX_PATH } });
+  const server = { proc, seq: 0, pending: new Map(), docs: new Map(), buf: Buffer.alloc(0), dead: false };
+  const send = msg => {
+    if (server.dead) return;
+    const body = JSON.stringify({ jsonrpc: '2.0', ...msg });
+    proc.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  };
+  server.notify = (method, params) => send({ method, params });
+  server.request = (method, params) => new Promise(resolve => {
+    if (server.dead) return resolve(null);
+    const id = ++server.seq;
+    server.pending.set(id, resolve);
+    send({ id, method, params });
+  });
+  proc.stdout.on('data', chunk => {
+    server.buf = Buffer.concat([server.buf, chunk]);
+    for (;;) {
+      const head = server.buf.indexOf('\r\n\r\n');
+      if (head < 0) return;
+      const length = +(/Content-Length: (\d+)/i.exec(server.buf.slice(0, head).toString()) || [])[1];
+      if (server.buf.length < head + 4 + length) return;
+      const msg = JSON.parse(server.buf.slice(head + 4, head + 4 + length).toString());
+      server.buf = server.buf.slice(head + 4 + length);
+      if (msg.id != null && !msg.method) {           // an answer to us
+        const done = server.pending.get(msg.id);
+        server.pending.delete(msg.id);
+        if (done) done(msg.result ?? null);
+      } else if (msg.method === 'textDocument/publishDiagnostics') {
+        let file; try { file = fileURLToPath(msg.params.uri); } catch { continue; }
+        const diagnostics = msg.params.diagnostics.map(d => ({
+          line: d.range.start.line, character: d.range.start.character, severity: d.severity || 1, message: d.message
+        }));
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send('lsp-diagnostics', { path: file, diagnostics });
+      } else if (msg.id != null) {                    // a question from the server
+        const result = msg.method === 'workspace/configuration' ? (msg.params.items || []).map(() => null) : null;
+        send({ id: msg.id, result });
+      }
+    }
+  });
+  proc.on('error', () => { server.dead = true; });
+  proc.on('exit', () => {
+    server.dead = true;
+    for (const done of server.pending.values()) done(null);
+    if (lsp === server) lsp = null;
+  });
+  server.ready = server.request('initialize', {
+    processId: process.pid,
+    rootUri: pathToFileURL(root).href,
+    capabilities: {
+      textDocument: {
+        completion: { completionItem: { snippetSupport: false, documentationFormat: ['plaintext'] } },
+        definition: {}, publishDiagnostics: {}
+      },
+      workspace: { configuration: true }
+    }
+  }).then(result => { if (result) server.notify('initialized', {}); return !!result; });
+  return server;
+}
+
+async function lspFor(p, text) {
+  if (!lsp) lsp = startLsp(path.dirname(p));
+  const server = lsp;
+  if (!await server.ready) return null;
+  const uri = pathToFileURL(p).href;
+  if (text != null) {
+    const version = (server.docs.get(uri) || 0) + 1;
+    if (version === 1) server.notify('textDocument/didOpen', { textDocument: { uri, languageId: path.extname(p) === '.bib' ? 'bibtex' : 'latex', version, text } });
+    else server.notify('textDocument/didChange', { textDocument: { uri, version }, contentChanges: [{ text }] });
+    server.docs.set(uri, version);
+  }
+  return { server, uri };
+}
+
+ipcMain.handle('lsp-sync', async (_e, p, text) => { await lspFor(p, text); return true; });
+
+ipcMain.handle('lsp-completion', async (_e, p, line, character) => {
+  const at = await lspFor(p);
+  if (!at) return [];
+  const res = await at.server.request('textDocument/completion', { textDocument: { uri: at.uri }, position: { line, character } });
+  const items = Array.isArray(res) ? res : (res && res.items) || [];
+  return items.slice(0, 60).map(i => ({
+    label: i.label,
+    detail: i.detail || (i.filterText && i.filterText !== i.label ? i.filterText.slice(i.label.length).trim() : ''),
+    edit: i.textEdit ? { start: i.textEdit.range.start, end: i.textEdit.range.end, text: i.textEdit.newText } : null,
+    insert: i.insertText || i.label
+  }));
+});
+
+ipcMain.handle('lsp-definition', async (_e, p, line, character) => {
+  const at = await lspFor(p);
+  if (!at) return [];
+  const res = await at.server.request('textDocument/definition', { textDocument: { uri: at.uri }, position: { line, character } });
+  return (Array.isArray(res) ? res : res ? [res] : []).map(l => {
+    const uri = l.targetUri || l.uri, range = l.targetSelectionRange || l.range;
+    try { return { path: fileURLToPath(uri), line: range.start.line, character: range.start.character }; } catch { return null; }
+  }).filter(Boolean);
+});
+
+app.on('will-quit', () => { if (lsp) lsp.proc.kill(); });
+
+// ---- SyncTeX: from a spot in the PDF to the source line, and back ----
+
+function synctex(args) {
+  return new Promise(resolve => execFile('synctex', args, { env: { ...process.env, PATH: TEX_PATH }, timeout: 10000 },
+    (err, stdout) => resolve(err ? '' : stdout)));
+}
+const field = (out, name) => (new RegExp(`^${name}:(.*)$`, 'm').exec(out) || [])[1];
+
+// source line -> where it was typeset: page and box in PDF points from the top left
+ipcMain.handle('synctex-view', async (_e, tex, line, column, pdf) => {
+  const out = await synctex(['view', '-i', `${line}:${Math.max(1, column)}:${tex}`, '-o', pdf]);
+  if (!field(out, 'Page')) return null;
+  return { page: +field(out, 'Page'), h: +field(out, 'h'), v: +field(out, 'v'), W: +field(out, 'W'), H: +field(out, 'H') };
+});
+
+// a point on a PDF page -> the source file and line it came from
+ipcMain.handle('synctex-edit', async (_e, pdf, page, x, y) => {
+  const out = await synctex(['edit', '-o', `${page}:${x}:${y}:${pdf}`]);
+  const input = field(out, 'Input'), line = +field(out, 'Line');
+  if (!input || !line) return null;
+  return { path: path.resolve(path.dirname(pdf), input), line };
+});
