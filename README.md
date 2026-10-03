@@ -79,7 +79,9 @@ its compiled PDF on the right, the way Gilles Castel keeps Zathura next to
 Vim. Margin compiles it with `latexmk` when you open it and again every time it
 saves (a moment after you stop typing); `Esc` compiles right away. The PDF keeps
 its scroll position across rebuilds. Errors show above the PDF with their line
-number — click one to jump there.
+number — click one to jump there. The editor numbers its lines (a wrapped line
+keeps one number, level with its first row); the caret's line stands out and
+lines with errors turn red.
 
 - In an empty file, `!` + Tab inserts a whole document, like `!` for HTML in
   VS Code. `!castel` + Tab uses Castel's lecture-notes setup instead (boxed

@@ -1206,7 +1206,47 @@
       animation: none;
     }
 
+    .tex-gutter {
+      display: none
+    }
+
+    /* line numbers: one per line of source, level with its first row when it wraps */
+    .pane-note.tex .notefile-page {
+      display: flex;
+      gap: 14px;
+    }
+
+    .pane-note.tex .tex-gutter {
+      display: block;
+      position: relative;
+      flex: 0 0 auto;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: calc(12px * var(--editor-font-scale));
+      color: var(--note-placeholder);
+      text-align: right;
+      user-select: none;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tex-gutter span {
+      position: absolute;
+      right: 0;
+    }
+
+    .tex-gutter span.current {
+      color: var(--note-text)
+    }
+
+    .tex-gutter span.error {
+      color: #D04848;
+      font-weight: 600
+    }
+
     .pane-note.tex .notefile-src {
+      flex: 1 1 0;
+      min-width: 0;
       font-family: var(--mono);
       font-size: calc(13.5px * var(--editor-font-scale));
       line-height: 1.6;
@@ -2369,6 +2409,7 @@
       root.setProperty('--pen-faint', hexToRgba(appearance.accent, .07));
       root.setProperty('--pen-deep', mixHex(appearance.accent, '#000000', .35));
       root.setProperty('--editor-font-scale', appearance.fontScale);
+      document.dispatchEvent(new Event('appearance'));
       // switching the feature off hides the button, the player and the
       // per-note timestamps; nothing already recorded is deleted
       document.body.classList.toggle('no-recording', appearance.recording === false);
@@ -3860,7 +3901,8 @@
       src.placeholder = 'Start writing…'; src.hidden = true;
       const rendered = document.createElement('div');
       rendered.className = 'note-render notefile-render';
-      notePage.append(src, rendered);
+      const gutter = document.createElement('div'); gutter.className = 'tex-gutter';
+      notePage.append(gutter, src, rendered);
       // a .tex file's compiled PDF, right next to its source
       const preview = document.createElement('div'); preview.className = 'tex-preview'; preview.hidden = true;
       const texStatus = document.createElement('div'); texStatus.className = 'tex-status';
@@ -3873,7 +3915,10 @@
       empty.innerHTML = '<strong>No file open</strong><span>Click a file in the sidebar</span>';
       paneSurface.append(pages, note, empty);
       el.append(tabbar, paneSurface);
-      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty, preview, texStatus, texPages, tex: null });
+      Object.assign(pane, { el, tabbar, surface: paneSurface, pages, note, src, rendered, empty, preview, texStatus, texPages, tex: null, gutter });
+      src.addEventListener('scroll', () => { gutter.scrollTop = src.scrollTop; });
+      for (const ev of ['keyup', 'mouseup', 'focus']) src.addEventListener(ev, () => markGutterLine(pane));
+      new ResizeObserver(() => scheduleGutter(pane)).observe(src);
       texStatus.addEventListener('click', () => jumpToTexError(pane));
       new ResizeObserver(() => relayoutTexPreview(pane)).observe(preview);
 
@@ -4101,6 +4146,7 @@
       if (tex) {
         pane.src.style.height = '';
         pane.rendered.hidden = true; pane.src.hidden = false;
+        paintGutter(pane);
         pane.src.scrollTop = tab.scrollTop || 0;
         showTexPreview(pane, tab.path);
       } else {
@@ -4397,6 +4443,60 @@
       if (isTexPath(path)) compileTex(path);
     }
 
+    // Line numbers for the .tex editor. Lines wrap, so each number goes level
+    // with the first row of its line — measured on an invisible copy of the
+    // editor with the same width and font, one block per line.
+    const gutterMirror = document.createElement('div');
+    Object.assign(gutterMirror.style, { position: 'absolute', visibility: 'hidden', left: '-9999px', top: '0' });
+    document.body.appendChild(gutterMirror);
+
+    document.addEventListener('appearance', () => panes.forEach(scheduleGutter)); // rows move with the font size
+
+    function scheduleGutter(pane) {
+      if (pane.gutterFrame || !pane.note.classList.contains('tex')) return;
+      pane.gutterFrame = requestAnimationFrame(() => { pane.gutterFrame = 0; paintGutter(pane); });
+    }
+
+    function paintGutter(pane) {
+      const ta = pane.src, cs = getComputedStyle(ta);
+      if (!pane.note.classList.contains('tex') || !ta.clientWidth) return;
+      const lines = ta.value.split('\n');
+      Object.assign(gutterMirror.style, {
+        width: ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) + 'px',
+        font: cs.font, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
+        whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak
+      });
+      gutterMirror.innerHTML = lines.map(l => '<div>' + (escapeHtml(l) || '\u200b') + '</div>').join('');
+      const rows = gutterMirror.children, top = parseFloat(cs.paddingTop);
+      const lineHeight = parseFloat(cs.lineHeight) || 20;
+      const errors = pane.texErrorLines || new Set();
+      let html = '';
+      for (let i = 0; i < rows.length; i++) {
+        html += `<span style="top:${rows[i].offsetTop + top}px;line-height:${lineHeight}px"` +
+          (errors.has(i + 1) ? ' class="error"' : '') + `>${i + 1}</span>`;
+      }
+      // a spacer as tall as the text, so the gutter can scroll as far as the editor
+      html += `<div style="height:${gutterMirror.offsetHeight + top + parseFloat(cs.paddingBottom) + ta.clientHeight}px"></div>`;
+      gutterMirror.innerHTML = '';
+      pane.gutter.style.width = String(lines.length).length + 'ch';
+      pane.gutter.innerHTML = html;
+      pane.gutter.scrollTop = ta.scrollTop;
+      pane.gutterLine = -1;
+      markGutterLine(pane);
+    }
+
+    // the caret's line number stands out, like Vim's CursorLineNr
+    function markGutterLine(pane) {
+      if (!pane.note.classList.contains('tex')) return;
+      const ta = pane.src;
+      const line = ta.value.slice(0, ta.selectionStart).split('\n').length - 1;
+      if (line === pane.gutterLine) return;
+      const spans = pane.gutter.querySelectorAll('span');
+      if (spans[pane.gutterLine]) spans[pane.gutterLine].classList.remove('current');
+      if (spans[line]) spans[line].classList.add('current');
+      pane.gutterLine = line;
+    }
+
     async function compileTexNow() {
       if (noteSaveTimer) { clearTimeout(noteSaveTimer); noteSaveTimer = null; await saveNoteFile(); }
       else if (State.activeFile && isTexPath(State.activeFile.path)) compileTex(State.activeFile.path);
@@ -4454,6 +4554,8 @@
       const el = pane.texStatus;
       el.classList.toggle('error', !!(res && res.errors && res.errors.length));
       pane.texError = null;
+      const errorLines = new Set((res && res.errors || []).filter(e => e.line && e.file === pane.tex.path).map(e => e.line));
+      if (String([...errorLines]) !== String([...(pane.texErrorLines || [])])) { pane.texErrorLines = errorLines; scheduleGutter(pane); }
       if (!res) { el.textContent = 'LaTeX'; return; }
       if (res.running) { el.textContent = 'Compiling…'; return; }
       if (res.errors && res.errors.length) {
@@ -4563,6 +4665,7 @@
       };
       source.addEventListener('input', () => {
         updateSnippetStops(source); autoGrow(source);
+        scheduleGutter(pane);
         if (focusedPane === pane) scheduleNoteSave();
       });
       source.addEventListener('blur', finish);
