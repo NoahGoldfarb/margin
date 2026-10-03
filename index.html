@@ -84,6 +84,17 @@
       background: #3A4657
     }
 
+    /* .md and .tex files scroll without a scrollbar; PDFs keep theirs */
+    .pane-surface.text-file,
+    .pane-note.tex .notefile-src {
+      scrollbar-width: none
+    }
+
+    .pane-surface.text-file::-webkit-scrollbar,
+    .pane-note.tex .notefile-src::-webkit-scrollbar {
+      display: none
+    }
+
     /* ---------- top bar ---------- */
     #bar {
       height: 34px;
@@ -4510,6 +4521,7 @@
       pane.note.classList.toggle('hidden', mode !== 'note');
       pane.empty.classList.toggle('hidden', mode !== 'empty');
       if (mode !== 'note') pane.surface.classList.remove('tex'); // a PDF needs its scrollbar back
+      pane.surface.classList.toggle('text-file', mode === 'note');
       // io and the lecture player both belong to whichever pane is actually
       // focused — setting an unfocused pane's mode (e.g. it just lost its
       // last tab in a split move) must not tear down what the user is
