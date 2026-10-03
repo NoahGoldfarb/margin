@@ -2239,7 +2239,7 @@
         <dd>In a <code>.tex</code> file: insert a whole document from a template (<code>!castel</code> for another one).
           The PDF compiles beside it on every save; Esc compiles right away</dd>
         <dt>In .tex</dt>
-        <dd><code>$</code> and brackets close themselves · ⌘/ comment · ⌘B / ⌘I bold / italic · ⌘F find &amp; replace ·
+        <dd><code>$</code> and brackets close themselves · <code>\begin{…}</code> writes its <code>\end{…}</code> · ⌘/ comment · ⌘B / ⌘I bold / italic · ⌘F find &amp; replace ·
           ⌘↩ recompile · double-click the PDF to jump to the source, ⌘⌥J the other way</dd>
         <dt>⌘-click / F12</dt>
         <dd>In a <code>.tex</code> file: jump to the <code>\label</code>, <code>\cite</code> entry or definition under the caret.
@@ -4903,15 +4903,51 @@
       if (mod && !e.altKey && e.key.toLowerCase() === 'b') { wrapSelection(ta, '\\textbf{', '}'); return true; }
       if (mod && !e.altKey && e.key.toLowerCase() === 'i') { wrapSelection(ta, '\\textit{', '}'); return true; }
       if (mod && e.altKey && e.code === 'KeyJ') { syncToPdf(pane); return true; }              // where is this line in the PDF?
+      if (e.key === '}' && !e.metaKey && !e.ctrlKey && closeBegin(ta)) return true;
       if (e.key === 'Enter' && !mod && !e.shiftKey && !e.altKey && !e.ctrlKey) {
         // keep the indentation, and indent one step inside a fresh \begin{…}
         const start = ta.selectionStart, line = ta.value.slice(ta.value.lastIndexOf('\n', start - 1) + 1, start);
         let indent = /^[ \t]*/.exec(line)[0];
+        // Enter in or right after a \begin{name} that has no \end yet: the whole block, caret inside
+        const open = /\\begin\{([^{}\n]+)$/.exec(line), closed = /\\begin\{([^{}\n]+)\}(?:\{[^{}\n]*\}|\[[^\]\n]*\])*$/.exec(line);
+        const env = open && ta.value[start] === '}' ? open : closed, over = env === open ? 1 : 0;
+        if (env && start === ta.selectionEnd && !inTexComment(ta, start) &&
+          /^[ \t]*(\n|$)/.test(ta.value.slice(start + over)) && !envClosed(ta.value, start + over, env[1])) {
+          insertSnippet(ta, start, start + over, `${over ? '}' : ''}\n${indent}  $0\n${indent}\\end{${env[1]}}`);
+          return true;
+        }
         if (/\\begin\{(?!document\})[^}]*\}/.test(line) && !/\\end\{/.test(line)) indent += '  ';
         editText(ta, start, ta.selectionEnd, '\n' + indent);
         return true;
       }
       return false;
+    }
+
+    // Is the \begin{name} that ends at `pos` already closed further down?
+    function envClosed(value, pos, name) {
+      const rest = value.slice(pos);
+      const end = rest.indexOf(`\\end{${name}}`), again = rest.indexOf(`\\begin{${name}}`);
+      return end >= 0 && (again < 0 || end < again);
+    }
+
+    // Typing the } of \begin{name} also writes \end{name} on the line below
+    // (the caret stays after the }, so \begin{tabular}{cc} can go on)
+    function closeBegin(ta) {
+      const start = ta.selectionStart, value = ta.value;
+      if (start !== ta.selectionEnd || inTexComment(ta, start)) return false;
+      const line = value.slice(value.lastIndexOf('\n', start - 1) + 1, start);
+      const env = /\\begin\{([^{}\n]+)$/.exec(line);
+      if (!env) return false;
+      const name = env[1], over = value[start] === '}' ? 1 : 0;
+      if (envClosed(value, start + over, name)) return false;
+      let lineEnd = value.indexOf('\n', start);
+      if (lineEnd < 0) lineEnd = value.length;
+      const indent = /^[ \t]*/.exec(line)[0];
+      hideCompletion();
+      skipCompletion = true;
+      editText(ta, start, lineEnd, '}' + value.slice(start + over, lineEnd) + `\n${indent}\\end{${name}}`);
+      ta.setSelectionRange(start + 1, start + 1);
+      return true;
     }
 
     function wrapSelection(ta, before, after) {
@@ -5227,9 +5263,8 @@
         let tail = next === '}' ? '' : '}';
         const env = /\\begin\{([^{}\n]*)$/.exec(lineBefore);
         if (env) {
-          const name = env[1], rest = ta.value.slice(to + (next === '}' ? 1 : 0));
-          const end = rest.indexOf(`\\end{${name}}`), again = rest.indexOf(`\\begin{${name}}`);
-          if (end < 0 || (again >= 0 && again < end)) {
+          const name = env[1];
+          if (!envClosed(ta.value, to + (next === '}' ? 1 : 0), name)) {
             const indent = /^[ \t]*/.exec(lineBefore)[0];
             insertSnippet(ta, from, to + (next === '}' ? 1 : 0), `${text}}\n${indent}  $0\n${indent}\\end{${name}}`);
             return;

@@ -111,7 +111,7 @@ The editor works like Overleaf's (minus the AI):
   `\begin{…}`, `\usepackage{…}`, `\input{…}`. `↑`/`↓` to choose, `Enter` or
   `Tab` to take it, `Esc` to close. `\frac` comes with `{|}{}` and Tab to the
   next argument, `\section` with `{|}` (also your own `\newcommand`s with
-  `[n]` arguments); an environment from `\begin{` brings its `\end{…}`.
+  `[n]` arguments); an environment from `\begin{`, picked or typed out, brings its `\end{…}`.
   Once the word is complete, `Enter` just starts a new line.
 - **Problems in the line numbers** — red for errors, amber for warnings; hover
   a number for the message.
