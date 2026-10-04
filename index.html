@@ -60,19 +60,22 @@
     /* dark, unobtrusive scrollbars instead of the default light ones */
     .pane-surface::-webkit-scrollbar,
     #tree::-webkit-scrollbar,
-    #latex-settings .card::-webkit-scrollbar {
+    #latex-settings .card::-webkit-scrollbar,
+    #help .card::-webkit-scrollbar {
       width: 10px
     }
 
     .pane-surface::-webkit-scrollbar-track,
     #tree::-webkit-scrollbar-track,
-    #latex-settings .card::-webkit-scrollbar-track {
+    #latex-settings .card::-webkit-scrollbar-track,
+    #help .card::-webkit-scrollbar-track {
       background: transparent
     }
 
     .pane-surface::-webkit-scrollbar-thumb,
     #tree::-webkit-scrollbar-thumb,
-    #latex-settings .card::-webkit-scrollbar-thumb {
+    #latex-settings .card::-webkit-scrollbar-thumb,
+    #help .card::-webkit-scrollbar-thumb {
       background: var(--rule);
       border-radius: 6px;
       border: 2px solid var(--ink);
@@ -157,6 +160,67 @@
       font-family: var(--mono);
       font-size: 11px;
       color: var(--chrome-strong)
+    }
+
+    /* in the top bar the buttons stay quiet until the pointer is on them */
+    #bar {
+      gap: 2px
+    }
+
+    #bar #pageinfo {
+      margin-left: 10px
+    }
+
+    #bar .chip {
+      background: transparent;
+      border-color: transparent;
+      padding: 4px 9px;
+    }
+
+    #bar .chip:hover {
+      background: var(--ink-2);
+      border-color: var(--rule)
+    }
+
+    #bar .chip kbd {
+      margin-left: 3px;
+      color: var(--chrome-dim);
+      transition: color var(--fast) var(--ease)
+    }
+
+    #bar .chip:hover kbd {
+      color: var(--chrome-text)
+    }
+
+    /* the two hints are not buttons */
+    #bar span.chip {
+      color: var(--chrome-dim);
+      cursor: default;
+      padding: 4px 6px
+    }
+
+    #bar span.chip:hover {
+      background: transparent;
+      border-color: transparent;
+      color: var(--chrome-dim)
+    }
+
+    #bar span.chip:active {
+      transform: none
+    }
+
+    #bar span.chip + button.chip {
+      margin-left: 6px;
+      position: relative
+    }
+
+    #bar span.chip + button.chip::before {
+      content: '';
+      position: absolute;
+      left: -5px;
+      top: 5px;
+      bottom: 5px;
+      border-left: 1px solid var(--rule)
     }
 
 
@@ -1137,8 +1201,14 @@
       font-size: 12.5px;
     }
 
-    .pane-empty.hidden {
+    .pane-empty.hidden,
+    body:has(#drop:not(.hidden)) .pane-empty {
       display: none
+    }
+
+    .pane-surface:has(> .pane-empty:not(.hidden)),
+    body:has(#drop:not(.hidden)) .pane-surface {
+      overflow: hidden
     }
 
     .pane-empty strong {
@@ -1803,7 +1873,47 @@
     .note-render h2,
     .note-render h3 {
       font-size: 1.05em;
+      line-height: 1.3;
       margin: .5em 0 .2em
+    }
+
+    .note-render h1 { font-size: 1.25em }
+    .note-render h2 { font-size: 1.12em }
+
+    /* a note file is a page of its own: headings like a document's */
+    .pane-note .notefile-render h1,
+    .pane-note .notefile-render h2,
+    .pane-note .notefile-render h3 {
+      font-weight: 600;
+      letter-spacing: -.01em;
+      margin: 1.2em 0 .4em
+    }
+
+    .pane-note .notefile-render h1 { font-size: 1.75em; margin-top: .6em }
+    .pane-note .notefile-render h2 { font-size: 1.35em }
+    .pane-note .notefile-render h3 { font-size: 1.12em }
+
+    /* marked puts a newline between list items; pre-wrap would show each as a blank line */
+    .note-render ul,
+    .note-render ol,
+    .note-render blockquote,
+    .note-render table {
+      white-space: normal
+    }
+
+    .note-render ul,
+    .note-render ol {
+      padding-left: 1.4em
+    }
+
+    .note-render li + li {
+      margin-top: .2em
+    }
+
+    .note-render hr {
+      border: 0;
+      border-top: 1px solid var(--note-border);
+      margin: 1.2em 0
     }
 
     .note-render code {
@@ -1827,9 +1937,9 @@
     }
 
     .note-render blockquote {
-      margin: .4em 0;
-      padding-left: .8em;
-      border-left: 2px solid var(--note-border);
+      margin: .6em 0;
+      padding: .1em 0 .1em .9em;
+      border-left: 3px solid var(--note-border);
       color: var(--note-muted)
     }
 
@@ -1881,6 +1991,24 @@
       line-height: 1.6
     }
 
+    #drop .chip {
+      padding: 7px 14px;
+      font-size: 13px;
+      border-radius: 6px;
+      margin: 0 3px
+    }
+
+    #drop #openbtn2 {
+      background: var(--pen);
+      border-color: var(--pen);
+      color: #fff
+    }
+
+    #drop #openbtn2:hover {
+      background: var(--pen-deep);
+      border-color: var(--pen-deep)
+    }
+
     #drop.hidden,
     #help.hidden {
       display: none
@@ -1904,10 +2032,13 @@
     #help .card {
       background: var(--ink-2);
       border: 1px solid var(--rule);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 22px 26px;
-      max-width: 560px;
+      max-width: 640px;
       width: 90%;
+      max-height: 86vh;
+      overflow-y: auto;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
       animation: modal-in .16s var(--ease);
     }
 
@@ -1926,6 +2057,21 @@
       margin: 0
     }
 
+    #help dl {
+      gap: 0 18px
+    }
+
+    #help dt,
+    #help dd {
+      padding: 7px 0;
+      border-top: 1px solid var(--rule)
+    }
+
+    #help dt:first-of-type,
+    #help dd:first-of-type {
+      border-top: 0
+    }
+
     #help dt {
       font-family: var(--mono);
       font-size: 12px;
@@ -1935,7 +2081,8 @@
 
     #help dd {
       margin: 0;
-      color: var(--chrome-text)
+      color: var(--chrome-text);
+      line-height: 1.45
     }
 
     #latex-settings {
@@ -1958,7 +2105,8 @@
       padding: 22px 26px;
       background: var(--ink-2);
       border: 1px solid var(--rule);
-      border-radius: 8px;
+      border-radius: 10px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
       animation: modal-in .16s var(--ease);
     }
 
@@ -2062,6 +2210,17 @@
       transform: scale(.96)
     }
 
+    .snippet-row button {
+      background: transparent;
+      border-color: transparent;
+      color: var(--chrome-dim)
+    }
+
+    .snippet-row button:hover {
+      border-color: var(--danger);
+      color: #E07070
+    }
+
     .snippet-actions {
       display: flex;
       gap: 8px;
@@ -2072,6 +2231,135 @@
     @media (max-width: 620px) {
       .snippet-row { grid-template-columns: 1fr 78px auto }
       .snippet-row input:nth-child(2) { grid-column: 1 / -1; grid-row: 2 }
+    }
+
+    /* ---------- the drawing pad (iPad) ---------- */
+    #bar #padbtn.on {
+      color: var(--pen);
+      border-color: var(--pen);
+      background: var(--pen-faint)
+    }
+
+    #pad-live {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      z-index: 27;
+      width: 280px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+      overflow: hidden;
+      font-size: 12px;
+      color: var(--chrome-text);
+    }
+
+    #pad-live.hidden,
+    #pad-label.hidden {
+      display: none
+    }
+
+    #pad-live .pl-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px 7px 11px
+    }
+
+    #pad-live .pl-what {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    #pad-live .pl-what b {
+      color: var(--chrome-strong);
+      font-weight: 600
+    }
+
+    #pad-live[data-kind="figure"] .pl-what {
+      color: var(--pen)
+    }
+
+    #pad-live .pl-ink {
+      background: transparent;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      color: var(--chrome-text);
+      font: inherit;
+      font-size: 11px;
+      padding: 2px 7px;
+      cursor: pointer
+    }
+
+    #pad-live .pl-ink:hover {
+      color: var(--chrome-strong);
+      border-color: var(--rule-strong)
+    }
+
+    #pad-live:not([data-kind="figure"]) .pl-ink {
+      display: none
+    }
+
+    /* the figure as it will look on paper */
+    #pad-live img {
+      display: block;
+      width: 100%;
+      max-height: 240px;
+      object-fit: contain;
+      background: #fff;
+      border-top: 1px solid var(--rule)
+    }
+
+    #pad-label {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      z-index: 29;
+      width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      background: var(--ink-2);
+      border: 1px solid var(--pen);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+
+    #pad-label textarea {
+      resize: none;
+      font-family: var(--mono);
+      font-size: 14px;
+      padding: 6px 8px;
+      background: var(--note);
+      color: var(--note-text);
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      outline: none
+    }
+
+    #pad-label .hint {
+      color: var(--chrome-dim);
+      font-size: 11px
+    }
+
+    /* a figure's $…$ labels, typeset by KaTeX over the picture; the baseline sits where it was drawn */
+    .note-render .img-wrap .fig-label {
+      position: absolute;
+      transform: translateY(-78%);
+      line-height: 1;
+      white-space: nowrap;
+      pointer-events: none;
+      color: var(--note-text)
+    }
+
+    /* black lines on a dark note would vanish: the figures follow the theme */
+    body.dark-note .note-render img.pad-figure {
+      filter: invert(1) hue-rotate(180deg)
     }
 
     /* ---------- lecture audio ---------- */
@@ -2204,6 +2492,7 @@
     <span class="spacer"></span>
     <span class="chip" title="Ctrl-click a page to add a note">split <kbd>Ctrl-click</kbd></span>
     <span class="chip" title="Drag on a page to highlight it">highlight <kbd>Drag</kbd></span>
+    <button class="chip" id="padbtn" title="Draw figures on the iPad (Sidecar) — they land at the caret">iPad</button>
     <button class="chip" id="recbtn" title="Record the lecture — notes get timestamped">Record</button>
     <button class="chip" id="latexbtn">LaTeX</button>
     <button class="chip" id="settingsbtn">Settings <kbd>⌃,</kbd></button>
@@ -2258,6 +2547,10 @@
         <dt>ggb / geo + Tab</dt>
         <dd>Open GeoGebra for a graph (<code>ggb</code>) or geometry without axes (<code>geo</code>); <code>⌘+Enter</code> and drag over the graph to insert that area as a picture.
           Drag a picture's corner dot to resize it</dd>
+        <dt>iPad</dt>
+        <dd>Draw with the Pencil on the iPad (Sidecar) — the figure lands at the caret, and later strokes go on into it.
+          Hold the Pencil still at the end of a stroke to make it a straight line, circle or rectangle; ends join up by themselves.
+          Select moves and restyles, Axes draws both axes in one drag; ⌘Z undoes the last stroke</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
@@ -2408,6 +2701,16 @@
     <span id="audio-time">0:00 / 0:00</span>
   </div>
   <audio id="lecture-audio" preload="metadata"></audio>
+
+  <!-- the drawing pad: what the Pencil draws into, live, and the box for a label -->
+  <div id="pad-live" class="hidden">
+    <div class="pl-head"><span class="pl-what"></span><button class="pl-ink" title="Polish this figure in Inkscape — its saves come back here">Inkscape</button></div>
+    <img alt="" hidden>
+  </div>
+  <div id="pad-label" class="hidden">
+    <textarea rows="1" spellcheck="false" placeholder="Label — $x$ for math"></textarea>
+    <span class="hint"><kbd>Enter</kbd> places it · <kbd>Esc</kbd> cancels</span>
+  </div>
 
   <div id="toast"></div>
   <input type="file" id="filepick" accept="application/pdf" hidden>
@@ -2606,6 +2909,8 @@
       // switching the feature off hides the button, the player and the
       // per-note timestamps; nothing already recorded is deleted
       document.body.classList.toggle('no-recording', appearance.recording === false);
+      const [nr, ng, nb] = hexToRgb(t.note);
+      document.body.classList.toggle('dark-note', (0.299 * nr + 0.587 * ng + 0.114 * nb) / 255 < 0.45);
     }
     applyAppearance();
 
@@ -3785,6 +4090,7 @@
       for (const img of target.querySelectorAll('img')) {
         const at = img.getAttribute('src') || '';
         if (base && !/^([a-z][\w+.-]*:|\/|#)/i.test(at)) img.src = new URL(at, base).href;
+        try { decorateFigureImg(img); } catch { /* the pad section isn't set up yet */ }
         const sized = /^(.*?)\s*\|\s*(\d+)$/.exec(img.alt); // ![alt|300](…), as in Obsidian
         if (sized) { img.alt = sized[1]; img.style.width = sized[2] + 'px'; }
         const wrap = document.createElement('span'); wrap.className = 'img-wrap';
@@ -5408,6 +5714,7 @@
       const source = pane.src, rendered = pane.rendered;
       const finish = () => {
         if (ggbTarget && ggbTarget.source === source) return; // the picture is still coming
+        if (pad.hold && pad.hold.source === source) return; // a label for the pad is being typed
         if (pane.note.classList.contains('tex')) return; // LaTeX stays source; its PDF is the preview
         renderMarkdown(source.value, rendered);
         source.hidden = true; rendered.hidden = false;
@@ -5952,6 +6259,7 @@
       body.append(source, rendered);
       const finish = () => {
         if (ggbTarget && ggbTarget.source === source) return; // the picture is still coming
+        if (pad.hold && pad.hold.source === source) return; // a label for the pad is being typed
         note.md = source.value;
         renderMarkdown(note.md, rendered);
         source.hidden = true;
@@ -6380,11 +6688,570 @@
     });
 
     /* ------------------------------------------------------------------ *
+     *  the drawing pad — the iPad (Sidecar) as a drawing surface that is
+     *  always there. The Pencil draws into the figure at the caret: the
+     *  first stroke puts a new figure into the note (a Markdown picture, or
+     *  a figure environment with \incfig in LaTeX), later strokes go on
+     *  into it. The caret on a figure's line, or on the empty line right
+     *  below it, means that figure; anywhere else the next stroke starts a
+     *  new one. Figures are SVG files: name.assets/fig-01.svg beside a note,
+     *  figures/fig-01.svg beside the root .tex (Castel's layout), where
+     *  Inkscape exports the .pdf + .pdf_tex after every change.
+     * ------------------------------------------------------------------ */
+    const pad = {
+      open: false,
+      target: null,          // what the Pencil draws into right now
+      sent: '',              // the target the pad was last told about
+      lastSource: null,      // the note editor the caret was last in
+      newKey: null,          // the key for "a new figure here", until one takes it
+      places: new Map(),     // new-figure key -> where it goes { source, doc, tex }
+      keys: new Map(),       // figure path -> the key the pad knows it by
+      figures: new Map(),    // key -> { path, name, tex, doc, root, source, created }
+      svgs: new Map(),       // figure path -> its latest SVG
+      versions: new Map(),   // figure path -> n, so pictures of it reload
+      roots: new Map(),      // .tex path -> its root .tex (where figures/ lives)
+      queue: new Map(),      // key -> the latest change not yet written
+      busy: false,
+      canUndo: false, canRedo: false,
+      lastPadAt: 0, lastTypeAt: 0,
+      hold: null,            // a note editor kept open while a label is typed
+      liveUrl: null
+    };
+    const MD_FIG = /!\[[^\]\n]*\]\(([^)\s]+\.svg)\)/i;
+    const TEX_FIG = /\\incfig(?:\[[^\]]*\])?\{([^}]+)\}/;
+    const TEX_FIG_ALL = /\\incfig(?:\[[^\]]*\])?\{([^}]+)\}/g;
+    const MD_FIG_ALL = /!\[[^\]\n]*\]\(([^)\s]+\.svg)\)/gi;
+
+    function lineAt(value, pos) {
+      const start = value.lastIndexOf('\n', pos - 1) + 1;
+      let end = value.indexOf('\n', pos);
+      if (end < 0) end = value.length;
+      return { start, end, text: value.slice(start, end) };
+    }
+
+    // dir + relative path, with . and .. resolved
+    function joinPath(dir, rel) {
+      const out = [];
+      for (const part of (rel.startsWith('/') ? rel : dir + '/' + rel).split('/')) {
+        if (part === '..') out.pop();
+        else if (part !== '.' && (part || !out.length)) out.push(part);
+      }
+      return out.join('/');
+    }
+
+    // an editor on screen: not hidden itself, and not in a pane showing something else
+    const isNoteEditor = el => !!el && el.tagName === 'TEXTAREA' && el.isConnected && !el.hidden &&
+      !el.closest('.hidden, [hidden]') && (el.classList.contains('note-src') || el.classList.contains('notefile-src'));
+
+    // Where the caret is: the note editor in use, or a Markdown file that is
+    // showing rendered (its figure then goes at the end)
+    function padSource() {
+      const a = document.activeElement;
+      if (isNoteEditor(a)) pad.lastSource = a;
+      const s = pad.lastSource;
+      if (isNoteEditor(s) && docOf(s))
+        return { source: s, doc: docOf(s), tex: isTexSource(s) };
+      const tab = activeTab();
+      if (focusedPane && tab && tab.type === 'note' && !isTexPath(tab.path) && tab.loaded)
+        return { source: focusedPane.src, doc: tab.path, tex: false, atEnd: true };
+      return null;
+    }
+
+    function texRootOf(doc) {
+      if (!pad.roots.has(doc)) {
+        const pane = panes.find(p => p.tex && p.tex.path === doc);
+        pad.roots.set(doc, pane ? pane.tex.root : doc); // most files are their own root
+        window.margin.texInfo(doc).then(i => {
+          if (i && i.root !== pad.roots.get(doc)) { pad.roots.set(doc, i.root); schedulePadSync(); }
+        });
+      }
+      return pad.roots.get(doc);
+    }
+
+    function mdFigurePath(doc, link) {
+      let rel = link;
+      try { rel = decodeURIComponent(link); } catch { }
+      if (/^file:\/\//i.test(rel)) return rel.slice(7);
+      if (/^[a-z][\w+.-]*:/i.test(rel)) return null; // on the web: not ours to draw into
+      return joinPath(dirOf(doc), rel);
+    }
+
+    // The figure the caret means, if any: { path, name }
+    function figureAtCaret(src) {
+      const { source, doc, tex } = src;
+      const value = source.value, pos = src.atEnd ? value.length : source.selectionEnd;
+      const line = lineAt(value, pos);
+      const above = line.start > 0 ? lineAt(value, line.start - 1) : null;
+      const here = !line.text.trim() && above ? above : line; // the empty line below a figure counts
+      if (!tex) {
+        const m = MD_FIG.exec(here.text);
+        const path = m && mdFigurePath(doc, m[1]);
+        return path ? { path, name: path.split('/').pop().replace(/\.svg$/i, '') } : null;
+      }
+      let m = TEX_FIG.exec(here.text);
+      if (!m) {
+        // inside \begin{figure} … \end{figure}, or on its \end line
+        const begin = value.lastIndexOf('\\begin{figure', here.end);
+        const end = begin < 0 ? -1 : value.indexOf('\\end{figure', begin);
+        if (end >= here.start && (here === line || /\\end\{figure/.test(here.text)))
+          m = TEX_FIG.exec(value.slice(begin, end));
+      }
+      if (!m) return null;
+      const path = joinPath(dirOf(texRootOf(doc)) + '/figures', m[1].replace(/\.(svg|pdf_tex|pdf)$/i, '') + '.svg');
+      return { path, name: m[1] };
+    }
+
+    function computePadTarget() {
+      const src = padSource();
+      if (!src) return {
+        kind: 'none', key: null,
+        label: State.path ? 'Ctrl-click the page for a note, or click into one — the figure goes where the caret is'
+          : 'Open or click into a note on the Mac — the figure goes where the caret is'
+      };
+      const label = src.doc.split('/').pop();
+      const fig = figureAtCaret(src);
+      if (fig) {
+        const key = pad.keys.get(fig.path) || 'fig:' + fig.path;
+        if (!pad.figures.has(key)) pad.figures.set(key, {
+          path: fig.path, name: fig.name, tex: src.tex, doc: src.doc, source: src.source, created: false
+        });
+        return { kind: 'figure', key, path: fig.path, name: fig.name, label, src };
+      }
+      if (!pad.newKey) pad.newKey = 'new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      pad.places.set(pad.newKey, src);
+      return { kind: 'new', key: pad.newKey, label, src };
+    }
+
+    async function figureSvg(path) {
+      if (!pad.svgs.has(path)) {
+        const text = await window.margin.readText(path);
+        if (text != null) pad.svgs.set(path, text);
+      }
+      return pad.svgs.get(path) || '';
+    }
+
+    let padSyncTimer = 0, padSyncSeq = 0;
+    function schedulePadSync() {
+      if (!pad.open) return;
+      clearTimeout(padSyncTimer);
+      padSyncTimer = setTimeout(syncPad, 50);
+    }
+
+    // Tell the pad what it is drawing into — only when that changes
+    async function syncPad({ reload = false } = {}) {
+      if (!pad.open) return;
+      const seq = ++padSyncSeq;
+      const t = computePadTarget();
+      pad.target = t;
+      const sig = [t.kind, t.key, t.label, t.name].join('|');
+      if (sig !== pad.sent || reload) {
+        const known = pad.sent.split('|')[1] === t.key && t.key && !reload;
+        const svg = t.kind === 'figure' && !known ? await figureSvg(t.path) : '';
+        if (seq !== padSyncSeq) return; // the caret moved on meanwhile
+        window.margin.padSend({ type: 'target', key: t.key, kind: t.kind, name: t.name || '', label: t.label, svg, reload });
+        pad.sent = sig;
+      }
+      paintPadLive();
+    }
+
+    /* ---- changes from the pad: write the file, put the figure in the note ---- */
+
+    function onPadChange(msg) {
+      pad.lastPadAt = Date.now();
+      pad.queue.set(msg.key, msg); // only the latest state of each figure matters
+      if (!pad.busy) drainPad();
+    }
+
+    async function drainPad() {
+      pad.busy = true;
+      try {
+        while (pad.queue.size) {
+          const [key, msg] = pad.queue.entries().next().value;
+          pad.queue.delete(key);
+          try { await applyPadChange(msg); }
+          catch (e) { toast('The figure could not be saved: ' + e.message); }
+        }
+      } finally { pad.busy = false; }
+    }
+
+    async function applyPadChange(msg) {
+      const fig = pad.figures.get(msg.key);
+      if (!fig) {
+        if (msg.empty) return;
+        const src = pad.places.get(msg.key);
+        if (!src) return;
+        await createFigure(msg.key, src, msg.svg);
+        return;
+      }
+      if (msg.empty && fig.created) { await removeFigure(msg.key, fig); return; }
+      pad.svgs.set(fig.path, msg.svg);
+      paintPadLive();
+      await window.margin.figureSave(fig.path, msg.svg, { tex: fig.tex });
+      refreshFigureImages(fig.path);
+    }
+
+    async function createFigure(key, src, svg, { quiet = false } = {}) {
+      const { source, doc, tex } = src;
+      if (!source.isConnected) return null;
+      const root = tex ? texRootOf(doc) : null;
+      const dir = tex ? dirOf(root) + '/figures' : doc.replace(/\.[^./]+$/, '') + '.assets';
+      // the next free number, counting files and what the text already names
+      let n = 0;
+      const names = ((await window.margin.readDir(dir)) || []).map(e => e.name);
+      for (const s of names.concat(source.value.match(/fig-\d+/g) || [])) {
+        const m = /fig-(\d+)/.exec(s);
+        if (m) n = Math.max(n, +m[1]);
+      }
+      const name = 'fig-' + String(n + 1).padStart(2, '0');
+      const path = dir + '/' + name + '.svg';
+      const res = await window.margin.figureSave(path, svg, { tex, now: true });
+      if (res && res.error && !quiet) toast('Figure saved, but ' + res.error);
+      const fig = { path, name, tex, doc, root, source, created: true };
+      pad.figures.set(key, fig);
+      pad.keys.set(path, key);
+      pad.svgs.set(path, svg);
+      if (pad.newKey === key) pad.newKey = null;
+      const assets = doc.split('/').pop().replace(/\.[^./]+$/, '') + '.assets';
+      insertFigureText(src, tex
+        ? `\\begin{figure}[ht]\n    \\centering\n    \\incfig{${name}}\n\\end{figure}`
+        : `![Figure](${encodeURIComponent(assets)}/${name}.svg)`);
+      if (tex) await ensureIncfig(src, root);
+      schedulePadSync();
+      return fig;
+    }
+
+    // On its own line: the caret's line if it is empty, else below it. The
+    // caret ends on the empty line under the figure, so the next strokes
+    // still go into it and typing starts a paragraph after it.
+    function insertFigureText(src, text) {
+      const { source } = src;
+      if (source.hidden) {
+        const pane = panes.find(p => p.src === source);
+        if (pane) pane.rendered.click(); // a rendered Markdown file opens, caret at the end
+      }
+      const value = source.value, line = lineAt(value, source.selectionEnd);
+      if (!line.text.trim()) editText(source, line.start, line.start, text + '\n');
+      else editText(source, line.end, line.end, '\n' + text + '\n');
+      autoGrow(source);
+    }
+
+    // \incfig is Castel's: a document without it gets it, before \begin{document}
+    async function ensureIncfig(src, root) {
+      const here = root === src.doc;
+      const text = here ? src.source.value : await window.margin.readText(root);
+      if (text == null) return;
+      const uses = pkg => new RegExp(`\\\\usepackage(\\[[^\\]]*\\])?\\{[^}]*\\b${pkg}\\b[^}]*\\}`).test(text);
+      const needsCommand = !/\\(newcommand|renewcommand|providecommand|def)\s*\{?\\incfig\b/.test(text);
+      const lines = [];
+      if (needsCommand) {
+        lines.push('% figures drawn on the iPad with Margin: pdf + pdf_tex from Inkscape');
+        for (const pkg of ['graphicx', 'import', 'transparent']) if (!uses(pkg)) lines.push(`\\usepackage{${pkg}}`);
+      }
+      if (!uses('x?color')) lines.push('\\usepackage{xcolor} % Inkscape colours the labels');
+      if (needsCommand)
+        lines.push('\\newcommand{\\incfig}[2][1]{%', '    \\def\\svgwidth{#1\\columnwidth}', '    \\import{./figures/}{#2.pdf_tex}', '}');
+      if (!lines.length) return;
+      const at = text.indexOf('\\begin{document}');
+      if (at < 0) { toast('Add \\incfig to the preamble — there is no \\begin{document} to put it before'); return; }
+      const block = lines.join('\n') + '\n\n';
+      if (here) {
+        const ta = src.source, caret = ta.selectionEnd, scroll = ta.scrollTop;
+        editText(ta, at, at, block);
+        ta.setSelectionRange(caret + block.length, caret + block.length);
+        ta.scrollTop = scroll;
+      } else {
+        await window.margin.writeText(root, text.slice(0, at) + block + text.slice(at));
+        toast('Added \\incfig to ' + root.split('/').pop());
+      }
+    }
+
+    // Undone back to nothing: a figure made just now goes again, file and all
+    async function removeFigure(key, fig) {
+      const source = fig.source, value = source.value;
+      let from = -1, to = -1;
+      if (fig.tex) {
+        const at = value.search(new RegExp(`\\\\incfig(\\[[^\\]]*\\])?\\{${escapeRegExp(fig.name)}\\}`));
+        if (at >= 0) {
+          const begin = value.lastIndexOf('\\begin{figure', at), end = value.indexOf('\\end{figure', at);
+          const close = end < 0 ? -1 : value.indexOf('}', end + 5);
+          if (begin >= 0 && close >= 0) { from = begin; to = close + 1; }
+          else { from = lineAt(value, at).start; to = lineAt(value, at).end; }
+        }
+      } else {
+        const at = value.indexOf('/' + fig.name + '.svg)');
+        if (at >= 0) { const line = lineAt(value, at); from = line.start; to = line.end; }
+      }
+      if (from >= 0 && source.isConnected) {
+        if (value[to] === '\n') to++;
+        const caret = source.selectionEnd;
+        editText(source, from, to, '');
+        const back = caret > to ? caret - (to - from) : Math.min(caret, from);
+        source.setSelectionRange(back, back);
+      }
+      for (const p of [fig.path, fig.path.replace(/\.svg$/i, '.pdf'), fig.path.replace(/\.svg$/i, '.pdf_tex')])
+        if (await window.margin.figureExists(p)) await window.margin.deletePath(p, false);
+      pad.figures.delete(key);
+      pad.keys.delete(fig.path);
+      pad.svgs.delete(fig.path);
+      pad.places.set(key, { source, doc: fig.doc, tex: fig.tex });
+      pad.newKey = key; // redo draws it back in, right here
+      schedulePadSync();
+    }
+
+    /* ---- the pad's buttons that act on the note ---- */
+
+    // the figure above the caret, nearest first
+    function previousFigure(src) {
+      const value = src.source.value.slice(0, src.atEnd ? undefined : src.source.selectionEnd);
+      const all = [...value.matchAll(src.tex ? TEX_FIG_ALL : MD_FIG_ALL)];
+      const m = all[all.length - 1];
+      if (!m) return null;
+      return src.tex
+        ? joinPath(dirOf(texRootOf(src.doc)) + '/figures', m[1].replace(/\.(svg|pdf_tex|pdf)$/i, '') + '.svg')
+        : mdFigurePath(src.doc, m[1]);
+    }
+
+    // a fresh empty line below the figure, with one between: the next stroke starts a new one
+    function moveBelowFigure(t) {
+      const { source, tex } = t.src;
+      const value = source.value;
+      let line = lineAt(value, source.selectionEnd);
+      if (!line.text.trim() && line.start > 0) line = lineAt(value, line.start - 1);
+      if (tex && !/\\end\{figure/.test(line.text)) {
+        const end = value.indexOf('\\end{figure', line.start);
+        if (end >= 0) line = lineAt(value, end);
+      }
+      source.setSelectionRange(line.end, line.end);
+      editText(source, line.end, line.end, '\n\n');
+      autoGrow(source);
+    }
+
+    async function copyPrevious() {
+      await syncPad();
+      let t = pad.target;
+      if (!t || t.kind === 'none') return;
+      const from = t.kind === 'figure' ? t.path : previousFigure(t.src);
+      if (!from) { toast('No figure above the caret to copy'); return; }
+      const svg = await figureSvg(from);
+      if (!svg) { toast('Could not read ' + from.split('/').pop()); return; }
+      if (t.kind === 'figure') { moveBelowFigure(t); t = computePadTarget(); pad.target = t; }
+      if (t.kind !== 'new') return;
+      const fig = await createFigure(t.key, t.src, svg);
+      if (!fig) return;
+      t = computePadTarget();
+      pad.target = t;
+      window.margin.padSend({ type: 'target', key: t.key, kind: t.kind, name: t.name || '', label: t.label, svg, reload: true });
+      pad.sent = [t.kind, t.key, t.label, t.name].join('|');
+      paintPadLive();
+    }
+
+    function newFigureBelow() {
+      const t = pad.target;
+      if (t && t.kind === 'figure') { moveBelowFigure(t); syncPad(); }
+    }
+
+    /* ---- labels: tapped on the pad, typed here with the snippets ---- */
+
+    function openPadLabel(text) {
+      const box = $('#pad-label'), ta = box.querySelector('textarea');
+      const t = pad.target;
+      const source = t && t.src ? t.src.source : null;
+      if (source && !pad.hold) pad.hold = { source, start: source.selectionStart, end: source.selectionEnd, scroll: source.scrollTop };
+      box.classList.remove('hidden');
+      ta.value = text || '';
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+
+    function closePadLabel(kind) {
+      const box = $('#pad-label'), ta = box.querySelector('textarea');
+      if (box.classList.contains('hidden')) return;
+      window.margin.padSend(kind === 'commit' ? { type: 'text-commit', text: ta.value } : { type: 'text-cancel' });
+      box.classList.add('hidden');
+      ta.value = '';
+      const hold = pad.hold;
+      pad.hold = null;
+      if (hold && hold.source.isConnected && !hold.source.hidden) {
+        hold.source.focus({ preventScroll: true });
+        hold.source.setSelectionRange(hold.start, hold.end);
+        hold.source.scrollTop = hold.scroll;
+      }
+    }
+
+    (() => {
+      const ta = $('#pad-label textarea');
+      ta.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closePadLabel('commit'); return; }
+        if (e.key === 'Escape') { e.preventDefault(); closePadLabel('cancel'); return; }
+        handleMathKey(ta, e);
+      });
+      ta.addEventListener('input', () => window.margin && window.margin.padSend({ type: 'text-preview', text: ta.value }));
+      ta.addEventListener('blur', () => setTimeout(() => {
+        if (document.activeElement !== ta) closePadLabel('commit');
+      }, 0));
+    })();
+
+    /* ---- what the Mac shows: a live preview, and the figure in the note ---- */
+
+    function paintPadLive() {
+      const box = $('#pad-live');
+      box.classList.toggle('hidden', !pad.open);
+      $('#padbtn').classList.toggle('on', pad.open);
+      if (!pad.open) return;
+      const t = pad.target || { kind: 'none' };
+      const what = box.querySelector('.pl-what'), img = box.querySelector('img');
+      box.dataset.kind = t.kind;
+      if (t.kind === 'figure') what.innerHTML = `✎ <b>${escapeHtml(t.name)}</b> — the Pencil draws into it`;
+      else if (t.kind === 'new') what.textContent = '✎ The next stroke starts a new figure here';
+      else what.textContent = '✎ Click into a note to draw into it';
+      const svg = t.kind === 'figure' ? pad.svgs.get(t.path) : '';
+      if (pad.liveUrl) URL.revokeObjectURL(pad.liveUrl);
+      pad.liveUrl = svg ? URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })) : null;
+      img.hidden = !pad.liveUrl;
+      if (pad.liveUrl) img.src = pad.liveUrl; else img.removeAttribute('src');
+    }
+
+    const fileOfImg = img => {
+      if (img.dataset.figure) return img.dataset.figure;
+      try { const u = new URL(img.src); return u.protocol === 'file:' ? decodeURIComponent(u.pathname) : ''; }
+      catch { return ''; }
+    };
+
+    // called by renderMarkdown for every picture: figures get their latest version
+    function decorateFigureImg(img) {
+      const path = fileOfImg(img);
+      if (!/\/fig-\d+\.svg$/i.test(path)) return;
+      img.classList.add('pad-figure');
+      img.dataset.figure = path;
+      const v = pad.versions.get(path);
+      if (v) img.src = img.src.split('?')[0] + '?v=' + v;
+      typesetFigureLabels(img);
+    }
+
+    function refreshFigureImages(path) {
+      const v = (pad.versions.get(path) || 0) + 1;
+      pad.versions.set(path, v);
+      for (const img of document.querySelectorAll('.note-render img.pad-figure'))
+        if (fileOfImg(img) === path) typesetFigureLabels(img);
+    }
+
+    // Labels with $…$: in a .tex file LaTeX typesets them (pdf_tex); in a note
+    // KaTeX does, laid over the picture — which then shows without that text
+    async function typesetFigureLabels(img) {
+      const path = fileOfImg(img);
+      const token = img._labelToken = (img._labelToken || 0) + 1;
+      const svg = await figureSvg(path);
+      if (img._labelToken !== token) return;
+      const wrap = img.parentElement;
+      const fileUrl = 'file://' + path.split('/').map(encodeURIComponent).join('/') + '?v=' + (pad.versions.get(path) || 0);
+      const doc = svg && /<text[\s\S]*\$/.test(svg) && window.katex ? new DOMParser().parseFromString(svg, 'image/svg+xml') : null;
+      const vb = doc && (doc.documentElement.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+      const labels = [];
+      if (doc && vb.length === 4 && vb[2] > 0) {
+        for (const t of doc.querySelectorAll('text')) {
+          if (!t.textContent.includes('$') || t.parentElement.closest('[transform]') || t.hasAttribute('transform')) continue;
+          const size = parseFloat((/font-size:\s*([\d.]+)/.exec(t.getAttribute('style') || '') || [])[1] || t.getAttribute('font-size')) || 28;
+          const fill = (/fill:\s*(#[0-9a-f]{3,6})/i.exec(t.getAttribute('style') || '') || [])[1] || '';
+          labels.push({
+            x: (+t.getAttribute('x') - vb[0]) / vb[2], y: (+t.getAttribute('y') - vb[1]) / vb[3], size: size / vb[2], text: t.textContent,
+            color: /^#0{3}(0{3})?$/.test(fill) ? '' : fill // black follows the note's text colour
+          });
+          t.textContent = '';
+        }
+      }
+      if (img._blob) { URL.revokeObjectURL(img._blob); img._blob = null; }
+      if (wrap) wrap.querySelectorAll('.fig-label').forEach(n => n.remove());
+      if (!labels.length) { img.src = fileUrl; return; }
+      img._blob = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(doc)], { type: 'image/svg+xml' }));
+      img.src = img._blob;
+      for (const l of labels) {
+        const span = document.createElement('span');
+        span.className = 'fig-label';
+        span.style.left = l.x * 100 + '%';
+        span.style.top = l.y * 100 + '%';
+        span.dataset.size = l.size;
+        if (l.color) span.style.color = l.color;
+        span.innerHTML = l.text.split(/(\$[^$]+\$)/).map(part => /^\$[^$]+\$$/.test(part)
+          ? katex.renderToString(part.slice(1, -1), { throwOnError: false }) : escapeHtml(part)).join('');
+        wrap.appendChild(span);
+      }
+      const fit = () => wrap.querySelectorAll('.fig-label').forEach(sp => { sp.style.fontSize = sp.dataset.size * img.clientWidth + 'px'; });
+      fit();
+      img.onload = fit;
+      if (!wrap._labelFit) { wrap._labelFit = new ResizeObserver(fit); wrap._labelFit.observe(img); }
+    }
+
+    async function togglePad() {
+      if (!hasShell || !window.margin.padToggle) { toast('The iPad pad needs the desktop app'); return; }
+      const open = await window.margin.padToggle();
+      if (open) toast('Drawing pad open — with Sidecar it is on the iPad');
+    }
+
+    $('#padbtn').onclick = togglePad;
+    $('#pad-live .pl-ink').onclick = () => {
+      const t = pad.target;
+      if (t && t.kind === 'figure') window.margin.figureInkscape(t.path, t.src.tex);
+    };
+
+    if (hasShell && window.margin.onPad) {
+      window.margin.onPadState(s => {
+        pad.open = s.open;
+        pad.sent = '';
+        if (!s.open) closePadLabel('cancel');
+        paintPadLive();
+        schedulePadSync();
+      });
+      window.margin.padIsOpen().then(open => { pad.open = open; paintPadLive(); schedulePadSync(); });
+      window.margin.onPad(msg => {
+        switch (msg.type) {
+          case 'hello': pad.sent = ''; syncPad(); break;
+          case 'activity': pad.lastPadAt = Date.now(); break;
+          case 'change': onPadChange(msg); break;
+          case 'history': pad.canUndo = msg.canUndo; pad.canRedo = msg.canRedo; break;
+          case 'text-request': openPadLabel(msg.text); break;
+          case 'copy-previous': copyPrevious(); break;
+          case 'new-figure': newFigureBelow(); break;
+        }
+      });
+      // Inkscape saved a figure: show it here and on the pad
+      window.margin.onFigureChanged(({ path, svg }) => {
+        pad.svgs.set(path, svg);
+        refreshFigureImages(path);
+        if (pad.target && pad.target.path === path) syncPad({ reload: true });
+        else paintPadLive();
+      });
+      // the pdf_tex is new: the document recompiles with it
+      window.margin.onFigureExported(({ path, error }) => {
+        if (error) { toast('Inkscape: ' + error); return; }
+        const fig = [...pad.figures.values()].find(f => f.path === path);
+        if (fig && fig.tex) compileTex(fig.doc);
+        else for (const p of panes) if (p.tex && path.startsWith(dirOf(p.tex.root) + '/figures/')) compileTex(p.tex.path);
+      });
+      // follow the caret
+      document.addEventListener('selectionchange', schedulePadSync);
+      document.addEventListener('focusin', schedulePadSync);
+      document.addEventListener('focusout', schedulePadSync);
+      document.addEventListener('input', schedulePadSync, true);
+      document.addEventListener('click', schedulePadSync, true);
+      setInterval(() => { if (pad.open) syncPad(); }, 1500);
+    }
+
+    /* ------------------------------------------------------------------ *
      *  global keys
      * ------------------------------------------------------------------ */
     window.addEventListener('keydown', e => {
       if (ggbTarget) return; // GeoGebra has the keyboard
       if (e.target.id === 'prompt-input' || e.target.id === 'search-input') return; // handled by their own listeners
+      if (e.target.closest && e.target.closest('#pad-label')) return; // a label for the pad
+      const typing = !e.ctrlKey && !e.metaKey && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter');
+      if (typing) pad.lastTypeAt = Date.now();
+      // ⌘Z undoes whatever came last — the stroke on the iPad or the typing here
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && pad.open && pad.lastPadAt > pad.lastTypeAt &&
+        (e.shiftKey ? pad.canRedo : pad.canUndo)) {
+        e.preventDefault();
+        window.margin.padSend({ type: e.shiftKey ? 'redo' : 'undo' });
+        return;
+      }
       const inEditor = e.target.tagName === 'TEXTAREA' && e.target.classList.contains('note-src') ||
         e.target.id === 'notefile-src';
       const mod = e.ctrlKey || e.metaKey;
@@ -6460,6 +7327,7 @@
       $('#openfolderbtn').style.display = 'none';
       $('#openfolderbtn2').style.display = 'none';
       $('#recbtn').style.display = 'none'; // recordings need a folder to live in
+      $('#padbtn').style.display = 'none'; // the pad is a window of the desktop app
     }
     $('#helpbtn').onclick = () => $('#help').classList.toggle('hidden');
     $('#help').onclick = e => { if (e.target.id === 'help') $('#help').classList.add('hidden'); };

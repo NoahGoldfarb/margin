@@ -47,5 +47,17 @@ contextBridge.exposeInMainWorld('margin', {
   // lecture audio
   audioPath:    p                  => ipcRenderer.invoke('audio-path', p),
   saveAudio:    (p, bytes, ext)    => ipcRenderer.invoke('save-audio', p, bytes, ext),
-  readAudio:    p                  => ipcRenderer.invoke('read-audio', p)
+  readAudio:    p                  => ipcRenderer.invoke('read-audio', p),
+
+  // the drawing pad on the iPad, and the figures it makes
+  padToggle:       ()               => ipcRenderer.invoke('pad-toggle'),
+  padIsOpen:       ()               => ipcRenderer.invoke('pad-open'),
+  padSend:         msg              => ipcRenderer.send('pad', msg),
+  onPad:           cb => ipcRenderer.on('pad', (_e, msg) => cb(msg)),
+  onPadState:      cb => ipcRenderer.on('pad-state', (_e, s) => cb(s)),
+  figureSave:      (p, svg, opts)   => ipcRenderer.invoke('figure-save', p, svg, opts),
+  figureExists:    p                => ipcRenderer.invoke('figure-exists', p),
+  figureInkscape:  (p, tex)         => ipcRenderer.invoke('figure-inkscape', p, tex),
+  onFigureChanged: cb => ipcRenderer.on('figure-changed', (_e, m) => cb(m)),
+  onFigureExported: cb => ipcRenderer.on('figure-exported', (_e, m) => cb(m))
 });

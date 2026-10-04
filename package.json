@@ -36,6 +36,8 @@
       "main.js",
       "preload.js",
       "index.html",
+      "pad.html",
+      "pad-preload.js",
       "templates/**",
       "vendor/**"
     ]

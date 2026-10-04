@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Margin Pad</title>
+  <link rel="stylesheet" href="vendor/katex.min.css">
+  <script src="vendor/katex.min.js" defer></script>
+  <!--
+    The drawing pad: Margin opens this on the iPad (Sidecar) and whatever the
+    Pencil draws lands in the note, as a figure at the caret. The page is 1000
+    units wide — the full width of the note or of \columnwidth — and endless
+    downwards; a figure is saved cropped to the height it uses, as plain SVG
+    that Inkscape opens like any of its own files.
+  -->
+  <style>
+    :root {
+      --bar: 64px;
+      --ink: #1d2027;
+      --dim: #7b818c;
+      --line: #d9dbe0;
+      --face: #f5f5f3;
+      --on: #1d2027;
+      --accent: #2F4CDB;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+      color: var(--ink);
+      font: 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    #bar {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: var(--bar);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 8px;
+      background: var(--face);
+      border-bottom: 1px solid var(--line);
+      z-index: 3;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    #bar::-webkit-scrollbar {
+      display: none
+    }
+
+    #bar .sep {
+      flex: none;
+      width: 1px;
+      align-self: stretch;
+      margin: 12px 3px;
+      background: var(--line)
+    }
+
+    #bar .grow {
+      flex: 1;
+      min-width: 4px
+    }
+
+    #bar button {
+      flex: none;
+      height: 50px;
+      min-width: 50px;
+      padding: 0 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 10.5px;
+      cursor: pointer;
+    }
+
+    #bar button svg {
+      width: 28px;
+      height: 18px;
+      overflow: visible
+    }
+
+    #bar button:disabled {
+      opacity: .35
+    }
+
+    #bar button.on {
+      background: var(--on);
+      border-color: var(--on);
+      color: #fff
+    }
+
+    #bar button.on svg * {
+      stroke: #fff
+    }
+
+    #bar button.on svg text {
+      fill: #fff
+    }
+
+    #bar button.on svg .fillable {
+      fill: #8a8f99
+    }
+
+    /* the colours: four round swatches in a square, the one in use ringed */
+    #swatches {
+      flex: none;
+      display: grid;
+      grid-template-columns: 22px 22px;
+      gap: 5px;
+      padding: 0 3px
+    }
+
+    #bar button.swatch {
+      min-width: 0;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px var(--line);
+    }
+
+    #bar button.swatch.on {
+      box-shadow: 0 0 0 2px var(--ink)
+    }
+
+    /* $…$ labels typeset over the drawing; the SVG text stays for the file */
+    #content text[data-math] {
+      fill-opacity: 0
+    }
+
+    #labels {
+      position: fixed;
+      inset: var(--bar) 0 0 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    #labels span {
+      position: absolute;
+      transform: translateY(-78%);
+      line-height: 1;
+      white-space: nowrap
+    }
+
+    #stage {
+      position: fixed;
+      inset: var(--bar) 0 0 0;
+      cursor: crosshair;
+    }
+
+    #stage.erase {
+      cursor: cell
+    }
+
+    #stage.text {
+      cursor: text
+    }
+
+    #stage.select {
+      cursor: default
+    }
+
+    #view {
+      display: block;
+      width: 100%;
+      height: 100%
+    }
+
+    /* what the pad draws into, out of the way at the bottom */
+    #status {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 6px 12px;
+      border-radius: 16px;
+      background: rgba(245, 245, 243, .92);
+      border: 1px solid var(--line);
+      color: var(--dim);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #status b {
+      color: var(--ink);
+      font-weight: 600
+    }
+
+    /* nothing to draw into yet: say so instead of swallowing strokes */
+    #veil {
+      position: fixed;
+      inset: var(--bar) 0 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, .82);
+      color: var(--dim);
+      font-size: 20px;
+      text-align: center;
+      padding: 30px;
+      z-index: 2;
+    }
+
+    #veil.hidden,
+    #selmenu.hidden {
+      display: none
+    }
+
+    #veil.flash {
+      color: var(--ink)
+    }
+
+    #caret {
+      fill: var(--accent)
+    }
+
+    /* what to do with the selection, right above it */
+    #selmenu {
+      position: fixed;
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--ink);
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+      z-index: 2;
+      transform: translate(-50%, -100%);
+    }
+
+    #selmenu button {
+      height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #selmenu button:active {
+      background: rgba(255, 255, 255, .15)
+    }
+
+    .sel-box {
+      fill: rgba(47, 76, 219, .05);
+      stroke: var(--accent);
+      stroke-width: 1.5;
+      stroke-dasharray: 6 5;
+      vector-effect: non-scaling-stroke
+    }
+
+    .lasso {
+      fill: rgba(47, 76, 219, .06);
+      stroke: var(--accent);
+      stroke-width: 1.5;
+      stroke-dasharray: 4 4;
+      vector-effect: non-scaling-stroke
+    }
+
+    .snap-mark {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke
+    }
+  </style>
+</head>
+
+<body>
+  <div id="bar">
+    <button id="undo" title="Undo (⌘Z on the Mac)" disabled>
+      <svg viewBox="0 0 30 18"><path d="M9 4 L4 9 L9 14 M4 9 H19 a6 6 0 0 1 0 12" fill="none" stroke="#1d2027" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 -2)"/></svg>Undo</button>
+    <button id="redo" title="Redo" disabled>
+      <svg viewBox="0 0 30 18"><path d="M21 4 L26 9 L21 14 M26 9 H11 a6 6 0 0 0 0 12" fill="none" stroke="#1d2027" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="translate(-2 -2)"/></svg>Redo</button>
+    <span class="sep"></span>
+    <button data-tool="pen" title="Draw — hold still at the end of a stroke for a clean shape">
+      <svg viewBox="0 0 30 18"><path d="M6 16 L8 11 L20 1 L24 5 L12 15 Z M8 11 L12 15" fill="none" stroke="#1d2027" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>Pen</button>
+    <button data-tool="select" title="Tap a stroke or draw around several — then drag them, restyle, duplicate or delete">
+      <svg viewBox="0 0 30 18"><path d="M9 1 L9 15 L13 11 L16 17 L18.5 16 L15.5 10 L21 10 Z" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round"/></svg>Select</button>
+    <button data-tool="text" title="Tap where a label goes, then type it on the Mac">
+      <svg viewBox="0 0 30 18"><text x="15" y="15" text-anchor="middle" font-family="serif" font-style="italic" font-size="17" fill="#1d2027" stroke="none">A</text></svg>Text</button>
+    <button data-tool="erase" title="Eraser: strike through whole strokes">
+      <svg viewBox="0 0 30 18"><path d="M8 15 L4 11 L13 2 L21 10 L16 15 Z M10 7 L17 14 M8 15 H26" fill="none" stroke="#1d2027" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>Eraser</button>
+    <button data-tool="axes" title="Axes: press at the origin and drag — one direction only gives a number line">
+      <svg viewBox="0 0 30 18"><path d="M8 17 V2 M5 5 L8 1 L11 5 M6 14 H27 M23 11 L27 14 L23 17" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>Axes</button>
+    <span class="sep"></span>
+    <button data-style="thick" title="Thick lines">
+      <svg viewBox="0 0 30 18"><path d="M3 9 H27" stroke="#1d2027" stroke-width="5" stroke-linecap="round"/></svg>Thick</button>
+    <button data-style="dashed" title="Dashed lines">
+      <svg viewBox="0 0 30 18"><path d="M3 9 H27" stroke="#1d2027" stroke-width="2.4" stroke-dasharray="6 4"/></svg>Dashed</button>
+    <button data-style="dotted" title="Dotted lines">
+      <svg viewBox="0 0 30 18"><path d="M4 9 H27" stroke="#1d2027" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.01 5.5"/></svg>Dotted</button>
+    <button data-style="arrow" title="Arrow: none → at the end → at both ends">
+      <svg viewBox="0 0 30 18"></svg><span>Arrow</span></button>
+    <button data-style="fill" title="Gray fill for closed shapes">
+      <svg viewBox="0 0 30 18"><ellipse class="fillable" cx="15" cy="9" rx="11" ry="7" fill="#d9d9d9" stroke="#1d2027" stroke-width="2"/></svg>Fill</button>
+    <span class="sep"></span>
+    <span id="swatches"></span>
+    <span class="sep"></span>
+    <button data-style="grid" title="Snap shapes to the dot grid">
+      <svg viewBox="0 0 30 18"><g fill="#1d2027" stroke="none"><circle cx="6" cy="3" r="1.6"/><circle cx="15" cy="3" r="1.6"/><circle cx="24" cy="3" r="1.6"/><circle cx="6" cy="15" r="1.6"/><circle cx="24" cy="15" r="1.6"/></g><path d="M6 15 L15 3 L24 15" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round"/></svg>Grid</button>
+    <span class="grow"></span>
+    <button id="copyprev" title="Start the next figure as a copy of the previous one">
+      <svg viewBox="0 0 30 18"><rect x="5" y="1" width="13" height="11" rx="2" fill="none" stroke="#1d2027" stroke-width="2"/><rect x="11" y="6" width="13" height="11" rx="2" fill="#fff" stroke="#1d2027" stroke-width="2"/></svg>Copy prev.</button>
+    <button id="newfig" title="Start a new figure below this one">
+      <svg viewBox="0 0 30 18"><path d="M15 2 V16 M8 9 H22" stroke="#1d2027" stroke-width="2.4" stroke-linecap="round"/></svg>New</button>
+  </div>
+
+  <div id="stage">
+    <svg id="view" xmlns="http://www.w3.org/2000/svg">
+      <defs id="defs">
+        <pattern id="dots" width="25" height="25" patternUnits="userSpaceOnUse">
+          <circle cx="12.5" cy="12.5" r="1.1" fill="#d4d6db" />
+        </pattern>
+      </defs>
+      <rect id="grid" x="0" y="-100000" width="1000" height="200000" fill="url(#dots)" />
+      <g id="content"></g>
+      <g id="live"></g>
+      <g id="ui"></g>
+    </svg>
+  </div>
+  <div id="labels"></div>
+  <div id="status">Starting…</div>
+  <div id="selmenu" class="hidden">
+    <button id="sel-dup">Duplicate</button>
+    <button id="sel-del">Delete</button>
+  </div>
+  <div id="veil" class="hidden"></div>
+
+  <script>
+    'use strict';
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const W = 1000;                    // page width in units; the note's full width
+    const GRAY = '#d9d9d9';
+    const TEXT_SIZE = 28;              // ≈ 10pt once 1000 units become \columnwidth
+    const HOLD_MS = 450;               // keep the Pencil still this long to snap a shape
+    const GRID = 25;                   // the dot grid; dots sit at 12.5 + 25k
+    const SNAP = 14;                   // ends this close to another end, corner or point join it
+    const COLORS = [
+      { name: 'black', hex: '#000000' },
+      { name: 'blue', hex: '#1f5ccc' },
+      { name: 'red', hex: '#d1352b' },
+      { name: 'green', hex: '#23884a' }
+    ];
+
+    // Arrow heads, scaled with the stroke, one pair per colour: "arrow" (the
+    // end) and "arrow-start". Inkscape keeps markers as they are.
+    const markerId = (hex, start) => {
+      const c = COLORS.find(c => c.hex === hex.toLowerCase()) || COLORS[0];
+      return 'arrow' + (start ? '-start' : '') + (c.name === 'black' ? '' : '-' + c.name);
+    };
+    const MARKERS = COLORS.map(c =>
+      `<marker id="${markerId(c.hex)}" orient="auto" markerUnits="strokeWidth" style="overflow:visible">` +
+      `<path d="M -4.2,-2.1 L 1.1,0 L -4.2,2.1 Z" style="fill:${c.hex};stroke:none"/></marker>` +
+      `<marker id="${markerId(c.hex, true)}" orient="auto" markerUnits="strokeWidth" style="overflow:visible">` +
+      `<path d="M 4.2,-2.1 L -1.1,0 L 4.2,2.1 Z" style="fill:${c.hex};stroke:none"/></marker>`).join('');
+
+    const $ = s => document.querySelector(s);
+    const view = $('#view'), content = $('#content'), live = $('#live'), ui = $('#ui'), stage = $('#stage');
+    view.querySelector('defs').insertAdjacentHTML('beforeend', MARKERS);
+
+    // the way to the Mac: Electron's preload, or nothing yet (page opened on its own)
+    const bridge = window.padBridge || { send() { }, on() { } };
+    const send = msg => bridge.send(msg);
+
+    // arrow: 0 none, 1 at the end, 2 at both ends
+    const style = { thick: false, dashed: false, dotted: false, arrow: 0, fill: false, grid: false, color: '#000000' };
+    let tool = 'pen';                  // 'pen' | 'select' | 'erase' | 'text' | 'axes'
+    let target = { key: null, kind: 'none', label: '' };
+    let scrollY = 0;                   // page units at the top of the stage
+    let extraDefs = [];                // <defs> children a loaded file brought along (Inkscape's)
+    const histories = new Map();       // figure key -> { undo: [snapshots], redo: [] }
+    let selection = [];                // selected items (Select tool)
+
+    /* ---------------------------------------------------------------- *
+     *  view: 1000 units across the stage, scrolled with two fingers
+     * ---------------------------------------------------------------- */
+    const scale = () => stage.clientWidth / W;
+    function layout() {
+      const h = stage.clientHeight / scale();
+      view.setAttribute('viewBox', `0 ${scrollY} ${W} ${h}`);
+      paintSelection();
+      paintLabels();
+    }
+
+    // Labels with $…$ typeset by KaTeX, laid over the drawing where the text sits
+    function paintLabels() {
+      const box = $('#labels');
+      box.replaceChildren();
+      if (!window.katex) return;
+      const top = stage.getBoundingClientRect().top;
+      for (const t of content.querySelectorAll('text')) {
+        const text = t.textContent;
+        if (!text.includes('$') || t.closest('[transform]') || t.style.opacity) { t.removeAttribute('data-math'); continue; }
+        t.setAttribute('data-math', '');
+        const at = pageToClient({ x: +t.getAttribute('x'), y: +t.getAttribute('y') });
+        const size = parseFloat((/font-size:\s*([\d.]+)/.exec(t.getAttribute('style') || '') || [])[1]) || TEXT_SIZE;
+        const span = document.createElement('span');
+        span.style.left = at.x + 'px';
+        span.style.top = at.y - top + 'px';
+        span.style.fontSize = size * scale() * 0.92 + 'px';
+        span.style.color = (/fill:\s*(#[0-9a-f]{3,6})/i.exec(t.getAttribute('style') || '') || [])[1] || '#000';
+        span.innerHTML = text.split(/(\$[^$]+\$)/).map(part => /^\$[^$]+\$$/.test(part)
+          ? katex.renderToString(part.slice(1, -1), { throwOnError: false })
+          : part.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))).join('');
+        box.appendChild(span);
+      }
+    }
+    window.addEventListener('load', () => paintLabels());
+    window.addEventListener('resize', layout);
+    stage.addEventListener('wheel', e => {
+      e.preventDefault();
+      scrollY = Math.max(-3000, Math.min(30000, scrollY + e.deltaY / scale()));
+      layout();
+    }, { passive: false });
+
+    const clientToPage = (cx, cy) => {
+      const r = stage.getBoundingClientRect();
+      return { x: (cx - r.left) / scale(), y: (cy - r.top) / scale() + scrollY };
+    };
+    const pageToClient = p => {
+      const r = stage.getBoundingClientRect();
+      return { x: r.left + p.x * scale(), y: r.top + (p.y - scrollY) * scale() };
+    };
+    const toPage = e => clientToPage(e.clientX, e.clientY);
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const r1 = v => Math.round(v * 10) / 10;
+
+    // a point in an element's own coordinates, on the page
+    function localToPage(node, x, y) {
+      const m = node.getScreenCTM();
+      if (!m) return { x, y };
+      const p = new DOMPoint(x, y).matrixTransform(m);
+      return clientToPage(p.x, p.y);
+    }
+
+    // an element's box on the page
+    function pageBox(node) {
+      const r = node.getBoundingClientRect();
+      const a = clientToPage(r.left, r.top), b = clientToPage(r.right, r.bottom);
+      return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  styles — Castel's table, cut down to the buttons that matter
+     * ---------------------------------------------------------------- */
+    const width = () => style.thick ? 5 : 2.5;
+    const dashFor = w => style.dashed ? `${4 * w},${3 * w}` : style.dotted ? `0.01,${2.6 * w}` : null;
+
+    function styleText({ closed = false, open = false, dot = false } = {}) {
+      const w = width(), c = style.color;
+      if (dot) return `fill:${c};stroke:none`;
+      const parts = [
+        `fill:${style.fill && !open ? GRAY : 'none'}`,
+        `stroke:${c}`, `stroke-width:${w}`, 'stroke-linecap:round', 'stroke-linejoin:round'
+      ];
+      const dash = dashFor(w);
+      if (dash) parts.push(`stroke-dasharray:${dash}`);
+      if (style.arrow && !closed) {
+        parts.push(`marker-end:url(#${markerId(c)})`);
+        if (style.arrow === 2) parts.push(`marker-start:url(#${markerId(c, true)})`);
+      }
+      return parts.join(';');
+    }
+
+    function el(name, attrs) {
+      const node = document.createElementNS(SVGNS, name);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+      return node;
+    }
+
+    // a style="" attribute as an ordered map, and back
+    function readStyle(node) {
+      const map = new Map();
+      for (const part of (node.getAttribute('style') || '').split(';')) {
+        const i = part.indexOf(':');
+        if (i > 0) map.set(part.slice(0, i).trim(), part.slice(i + 1).trim());
+      }
+      return map;
+    }
+    function writeStyle(node, map) {
+      node.setAttribute('style', [...map].map(([k, v]) => k + ':' + v).join(';'));
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  snapping: ends join ends, corners and points; shapes to the grid
+     * ---------------------------------------------------------------- */
+    let snapCache = [];
+
+    // every end, corner and point already on the page
+    function snapTargets() {
+      const out = [];
+      const add = (n, x, y) => out.push(localToPage(n, x, y));
+      const walk = n => {
+        switch (n.localName) {
+          case 'g': for (const c of n.children) walk(c); break;
+          case 'path': {
+            const d = n.getAttribute('d') || '';
+            if (/^[MLZ\d\s.,-]+$/.test(d)) {
+              const nums = d.match(/-?\d*\.?\d+/g).map(Number);
+              for (let i = 0; i + 1 < nums.length; i += 2) add(n, nums[i], nums[i + 1]);
+            } else {
+              try {
+                const len = n.getTotalLength(), a = n.getPointAtLength(0), b = n.getPointAtLength(len);
+                add(n, a.x, a.y); add(n, b.x, b.y);
+              } catch { /* not a drawable path */ }
+            }
+            break;
+          }
+          case 'circle': case 'ellipse': add(n, +n.getAttribute('cx'), +n.getAttribute('cy')); break;
+          case 'rect': {
+            const x = +n.getAttribute('x'), y = +n.getAttribute('y'), w = +n.getAttribute('width'), h = +n.getAttribute('height');
+            add(n, x, y); add(n, x + w, y); add(n, x, y + h); add(n, x + w, y + h);
+            break;
+          }
+          case 'line':
+            add(n, +n.getAttribute('x1'), +n.getAttribute('y1')); add(n, +n.getAttribute('x2'), +n.getAttribute('y2'));
+            break;
+        }
+      };
+      for (const n of content.children) walk(n);
+      return out;
+    }
+
+    function endSnap(p) {
+      let best = null, d = SNAP;
+      for (const q of snapCache) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
+      return best ? { x: best.x, y: best.y, snapped: true } : null;
+    }
+    const gridSnap = p => ({ x: Math.round((p.x - 12.5) / GRID) * GRID + 12.5, y: Math.round((p.y - 12.5) / GRID) * GRID + 12.5 });
+    // an end of a straight piece: another end first, else the grid when it is on
+    const snapPt = p => endSnap(p) || (style.grid ? gridSnap(p) : p);
+
+    function showSnapMarks(points) {
+      ui.querySelectorAll('.snap-mark').forEach(n => n.remove());
+      for (const p of points) if (p && p.snapped) ui.appendChild(el('circle', { class: 'snap-mark', cx: p.x, cy: p.y, r: 7 }));
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  shape recognition — hold the Pencil at the end of a stroke
+     * ---------------------------------------------------------------- */
+    function pathLength(pts) {
+      let n = 0;
+      for (let i = 1; i < pts.length; i++) n += dist(pts[i - 1], pts[i]);
+      return n;
+    }
+
+    function segDist(p, a, b) {
+      const dx = b.x - a.x, dy = b.y - a.y, len = dx * dx + dy * dy;
+      if (!len) return dist(p, a);
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len));
+      return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+    }
+
+    // Ramer–Douglas–Peucker: the corners of a stroke
+    function simplify(pts, eps) {
+      if (pts.length < 3) return pts.slice();
+      let far = 0, at = 0;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const d = segDist(pts[i], pts[0], pts[pts.length - 1]);
+        if (d > far) { far = d; at = i; }
+      }
+      if (far <= eps) return [pts[0], pts[pts.length - 1]];
+      return simplify(pts.slice(0, at + 1), eps).slice(0, -1).concat(simplify(pts.slice(at), eps));
+    }
+
+    // a straight line snaps to 0°, 45°, 90° … when it is close
+    function snapAngle(a, b) {
+      const ang = Math.atan2(b.y - a.y, b.x - a.x), len = dist(a, b);
+      const step = Math.PI / 4, near = Math.round(ang / step) * step;
+      if (Math.abs(ang - near) > 0.12) return b;
+      return { x: a.x + Math.cos(near) * len, y: a.y + Math.sin(near) * len };
+    }
+
+    // the far end of a line: another end, else the angle and the grid
+    function lineEnd(a, p) {
+      const e = endSnap(p);
+      if (e) return e;
+      const b = snapAngle(a, p);
+      return style.grid ? gridSnap(b) : b;
+    }
+
+    function recognize(pts) {
+      const len = pathLength(pts);
+      if (len < 20) return null;
+      const a = pts[0], b = pts[pts.length - 1], chord = dist(a, b);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of pts) {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      }
+      const w = maxX - minX, h = maxY - minY, diag = Math.hypot(w, h);
+
+      // a line: nothing strays far from the chord
+      let dev = 0;
+      for (const p of pts) dev = Math.max(dev, segDist(p, a, b));
+      if (chord > 15 && dev < Math.max(5, chord * 0.07)) {
+        const a2 = snapPt(a);
+        return { type: 'line', a: a2, b: lineEnd(a2, b) };
+      }
+
+      const closed = chord < Math.max(18, 0.28 * Math.max(w, h)) && len > 1.8 * Math.max(w, h);
+      if (closed && w > 12 && h > 12) {
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = w / 2, ry = h / 2;
+        let eErr = 0, rErr = 0;
+        for (const p of pts) {
+          const r = Math.hypot((p.x - cx) / rx, (p.y - cy) / ry);
+          eErr += Math.abs(r - 1) * (rx + ry) / 2;
+          rErr += Math.min(Math.abs(p.x - minX), Math.abs(p.x - maxX), Math.abs(p.y - minY), Math.abs(p.y - maxY));
+        }
+        eErr /= pts.length; rErr /= pts.length;
+        const corners = simplify(pts, 0.09 * diag);
+        const n = corners.length - (dist(corners[0], corners[corners.length - 1]) < 0.2 * diag ? 1 : 0);
+        if (n === 3) return { type: 'polygon', pts: corners.slice(0, 3).map(snapPt) };
+        if (rErr < eErr * 0.75 && rErr < 0.06 * diag) {
+          const p0 = snapPt({ x: minX, y: minY }), p1 = snapPt({ x: maxX, y: maxY });
+          return { type: 'rect', x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y };
+        }
+        if (eErr < 0.09 * diag) {
+          const c = style.grid ? gridSnap({ x: cx, y: cy }) : { x: cx, y: cy };
+          const grid = v => style.grid ? Math.max(GRID / 2, Math.round(v / (GRID / 2)) * (GRID / 2)) : v;
+          if (Math.abs(rx - ry) < 0.16 * Math.max(rx, ry)) return { type: 'circle', cx: c.x, cy: c.y, r: grid((rx + ry) / 2) };
+          return { type: 'ellipse', cx: c.x, cy: c.y, rx: grid(rx), ry: grid(ry) };
+        }
+        if (n === 4) return { type: 'polygon', pts: corners.slice(0, 4).map(snapPt) };
+        return null;
+      }
+
+      // an open zig-zag of a few straight pieces: axes, angles, a "V"
+      const corners = simplify(pts, Math.max(4, 0.05 * diag));
+      if (corners.length >= 3 && corners.length <= 4) {
+        let fit = 0;
+        for (const p of pts) {
+          let best = Infinity;
+          for (let i = 1; i < corners.length; i++) best = Math.min(best, segDist(p, corners[i - 1], corners[i]));
+          fit = Math.max(fit, best);
+        }
+        if (fit < Math.max(5, 0.05 * diag)) return { type: 'polyline', pts: corners.map(snapPt) };
+      }
+      return null;
+    }
+
+    function shapeElement(s) {
+      const d = pts => pts.map((p, i) => (i ? 'L ' : 'M ') + r1(p.x) + ' ' + r1(p.y)).join(' ');
+      switch (s.type) {
+        case 'line': return el('path', { d: d([s.a, s.b]), style: styleText({ open: true }) });
+        case 'polyline': return el('path', { d: d(s.pts), style: styleText({ open: true }) });
+        case 'polygon': return el('path', { d: d(s.pts) + ' Z', style: styleText({ closed: true }) });
+        case 'rect': return el('rect', {
+          x: r1(Math.min(s.x, s.x + s.w)), y: r1(Math.min(s.y, s.y + s.h)),
+          width: r1(Math.abs(s.w)), height: r1(Math.abs(s.h)), style: styleText({ closed: true })
+        });
+        case 'circle': return el('circle', { cx: r1(s.cx), cy: r1(s.cy), r: r1(s.r), style: styleText({ closed: true }) });
+        case 'ellipse': return el('ellipse', { cx: r1(s.cx), cy: r1(s.cy), rx: r1(s.rx), ry: r1(s.ry), style: styleText({ closed: true }) });
+      }
+    }
+
+    // freehand: drop the jitter, then a smooth curve through what is left
+    function smoothPath(pts) {
+      const p = simplify(pts, 0.7);
+      if (p.length < 3) return 'M ' + r1(p[0].x) + ' ' + r1(p[0].y) + ' L ' + r1(p[p.length - 1].x) + ' ' + r1(p[p.length - 1].y);
+      let d = 'M ' + r1(p[0].x) + ' ' + r1(p[0].y);
+      for (let i = 0; i < p.length - 1; i++) {
+        const p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2;
+        d += ` C ${r1(p1.x + (p2.x - p0.x) / 6)} ${r1(p1.y + (p2.y - p0.y) / 6)} ` +
+          `${r1(p2.x - (p3.x - p1.x) / 6)} ${r1(p2.y - (p3.y - p1.y) / 6)} ${r1(p2.x)} ${r1(p2.y)}`;
+      }
+      return d;
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  the content, its history, and the file it becomes
+     * ---------------------------------------------------------------- */
+    const items = () => [...content.children];
+    const snapshot = () => items().map(n => n.cloneNode(true));
+    function restore(snap) {
+      content.replaceChildren(...snap.map(n => n.cloneNode(true)));
+    }
+    function history() {
+      let h = histories.get(target.key);
+      if (!h) histories.set(target.key, h = { undo: [], redo: [], last: snapshot() });
+      return h;
+    }
+    function paintHistory() {
+      const h = target.key ? history() : { undo: [], redo: [] };
+      $('#undo').disabled = !h.undo.length;
+      $('#redo').disabled = !h.redo.length;
+      send({ type: 'history', canUndo: !!h.undo.length, canRedo: !!h.redo.length });
+    }
+
+    // every finished action: one undo step, and the figure goes to the Mac
+    function commit() {
+      const h = history();
+      h.undo.push(h.last);
+      if (h.undo.length > 200) h.undo.shift();
+      h.redo = [];
+      h.last = snapshot();
+      paintHistory();
+      paintLabels();
+      publish();
+    }
+    function undo() {
+      const h = history();
+      if (!h.undo.length) return;
+      h.redo.push(h.last);
+      h.last = h.undo.pop();
+      restore(h.last);
+      select([]);
+      paintHistory(); paintLabels(); publish();
+    }
+    function redo() {
+      const h = history();
+      if (!h.redo.length) return;
+      h.undo.push(h.last);
+      h.last = h.redo.pop();
+      restore(h.last);
+      select([]);
+      paintHistory(); paintLabels(); publish();
+    }
+    $('#undo').onclick = undo;
+    $('#redo').onclick = redo;
+
+    function publish() {
+      send({ type: 'change', key: target.key, svg: serialize(), empty: !content.children.length });
+    }
+
+    // Cropped to the height the drawing uses, always the full 1000 wide, so
+    // left, middle and right stay where they were drawn on the page.
+    function serialize() {
+      let y0 = 0, h = 100;
+      if (content.children.length) {
+        const b = content.getBBox();
+        const pad = 20; // room for stroke widths and arrow heads
+        y0 = Math.floor(b.y - pad);
+        h = Math.max(40, Math.ceil(b.height + 2 * pad));
+      }
+      const doc = document.implementation.createDocument(SVGNS, 'svg', null);
+      const root = doc.documentElement;
+      root.setAttribute('width', W);
+      root.setAttribute('height', h);
+      root.setAttribute('viewBox', `0 ${y0} ${W} ${h}`);
+      const defs = doc.createElementNS(SVGNS, 'defs');
+      // only the arrow heads in use, so the file stays small
+      const used = new Set([...content.querySelectorAll('[style*="marker"]')].flatMap(n =>
+        [...(n.getAttribute('style') || '').matchAll(/url\(#([\w-]+)\)/g)].map(m => m[1])));
+      const tmp = document.createElementNS(SVGNS, 'defs');
+      tmp.innerHTML = MARKERS;
+      for (const m of tmp.children) if (used.has(m.id)) defs.appendChild(doc.importNode(m, true));
+      for (const d of extraDefs) if (!/^arrow/.test(d.id || '')) defs.appendChild(doc.importNode(d, true));
+      const g = doc.createElementNS(SVGNS, 'g');
+      g.setAttribute('id', 'figure');
+      for (const n of items()) { g.appendChild(doc.createTextNode('\n')); g.appendChild(doc.importNode(n, true)); }
+      for (const n of g.querySelectorAll('[data-math]')) n.removeAttribute('data-math');
+      g.appendChild(doc.createTextNode('\n'));
+      root.append(doc.createTextNode('\n'), defs, doc.createTextNode('\n'), g, doc.createTextNode('\n'));
+      return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc) + '\n';
+    }
+
+    // A figure from disk. Ours come back as they went out; one that Inkscape
+    // saved may have layers, other units or its own defs — every object
+    // becomes something the eraser can take, at our scale.
+    function load(svgText) {
+      content.replaceChildren();
+      extraDefs = [];
+      if (!svgText) return;
+      const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+      const root = doc.documentElement;
+      if (!root || root.localName !== 'svg') return;
+      const vb = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+      const vw = vb.length === 4 && vb[2] > 0 ? vb[2] : parseFloat(root.getAttribute('width')) || W;
+      const k = W / vw, ox = vb.length === 4 ? vb[0] : 0;
+      const wrap = k !== 1 || ox !== 0 ? `matrix(${k},0,0,${k},${-ox * k},0)` : '';
+      const SKIP = new Set(['defs', 'metadata', 'namedview', 'title', 'desc', 'style', 'script']);
+      const take = (node, transform) => {
+        for (const child of [...node.children]) {
+          if (SKIP.has(child.localName)) {
+            if (child.localName === 'defs') for (const d of child.children) if (!/^arrow/.test(d.id || '')) extraDefs.push(document.importNode(d, true));
+            continue;
+          }
+          const layer = child.localName === 'g' && (child.getAttribute('id') === 'figure' ||
+            child.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'groupmode') === 'layer');
+          const t = [transform, child.localName === 'g' && layer ? child.getAttribute('transform') : ''].filter(Boolean).join(' ');
+          if (layer) { take(child, t); continue; }
+          const node2 = document.importNode(child, true);
+          if (transform) {
+            const g = document.createElementNS(SVGNS, 'g');
+            g.setAttribute('transform', transform);
+            g.appendChild(node2);
+            content.appendChild(g);
+          } else content.appendChild(node2);
+        }
+      };
+      take(root, wrap);
+      const defs = view.querySelector('defs');
+      defs.querySelectorAll('.extra').forEach(n => n.remove());
+      for (const d of extraDefs) { const c = d.cloneNode(true); c.classList.add('extra'); defs.appendChild(c); }
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  the Pencil — one gesture at a time, whichever tool is in hand
+     * ---------------------------------------------------------------- */
+    let stroke = null, erasing = null, picking = null, axes = null, hold = 0;
+
+    stage.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch' || e.button > 0) return; // fingers scroll
+      e.preventDefault();
+      if (target.kind === 'none' || !target.key) { flashVeil(); return; }
+      stage.setPointerCapture(e.pointerId);
+      const p = toPage(e);
+      send({ type: 'activity' });
+      snapCache = snapTargets();
+      if (tool === 'text') { askText(p); return; }
+      if (tool === 'erase') { erasing = { id: e.pointerId, gone: [] }; eraseAt(e.clientX, e.clientY); return; }
+      if (tool === 'select') { startPick(e, p); return; }
+      if (tool === 'axes') { const o = snapPt(p); axes = { id: e.pointerId, o, c: o }; showSnapMarks([o]); return; }
+      const start = endSnap(p) || p;
+      showSnapMarks([start]);
+      stroke = { id: e.pointerId, pts: [start], snapped: null, anchor: start, path: el('path', { style: styleText() }) };
+      stroke.path.style.fill = 'none';
+      live.appendChild(stroke.path);
+      paintLive();
+    });
+
+    stage.addEventListener('pointermove', e => {
+      // only the pointer that is pressed draws: a mouse hovering by adds nothing
+      const active = stroke || erasing || picking || axes;
+      if (!active || e.pointerId !== active.id || !(e.buttons & 1)) return;
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      if (erasing) {
+        for (const ev of evs.length ? evs : [e]) eraseAt(ev.clientX, ev.clientY);
+        return;
+      }
+      if (picking) { movePick(toPage(e)); return; }
+      if (axes) { axes.c = style.grid ? gridSnap(toPage(e)) : toPage(e); paintAxes(); return; }
+      for (const ev of evs.length ? evs : [e]) {
+        const p = toPage(ev);
+        if (stroke.snapped) {
+          // a snapped line keeps following the Pencil, as in Notes
+          if (stroke.snapped.type === 'line') {
+            stroke.snapped.b = lineEnd(stroke.snapped.a, p);
+            showSnapped();
+          }
+          continue;
+        }
+        if (dist(p, stroke.pts[stroke.pts.length - 1]) < 0.6) continue;
+        stroke.pts.push(p);
+        if (dist(p, stroke.anchor) > 3.5) { stroke.anchor = p; armHold(); }
+      }
+      if (!stroke.snapped) paintLive();
+    });
+
+    function armHold() {
+      clearTimeout(hold);
+      hold = setTimeout(() => {
+        if (!stroke || stroke.snapped) return;
+        const s = recognize(stroke.pts);
+        if (!s) return;
+        stroke.snapped = s;
+        showSnapped();
+      }, HOLD_MS);
+    }
+
+    function paintLive() {
+      const pts = stroke.pts;
+      stroke.path.setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + r1(p.x) + ' ' + r1(p.y)).join(' ') +
+        (pts.length === 1 ? ' l 0.01 0' : ''));
+    }
+
+    function showSnapped() {
+      live.replaceChildren(shapeElement(stroke.snapped));
+      const s = stroke.snapped;
+      showSnapMarks(s.type === 'line' ? [s.a, s.b] : s.pts || []);
+    }
+
+    function endStroke() {
+      clearTimeout(hold);
+      const s = stroke;
+      stroke = null;
+      live.replaceChildren();
+      showSnapMarks([]);
+      if (!s) return;
+      let node;
+      if (s.snapped) node = shapeElement(s.snapped);
+      else if (pathLength(s.pts) < 3) {
+        // a tap is a point, the kind every geometry figure has
+        const c = snapPt(s.pts[0]);
+        node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
+      } else {
+        // a freehand stroke that ends on another end joins it
+        const end = endSnap(s.pts[s.pts.length - 1]);
+        if (end) s.pts[s.pts.length - 1] = end;
+        const closedish = s.pts.length > 4 && dist(s.pts[0], s.pts[s.pts.length - 1]) < 14;
+        node = el('path', { d: smoothPath(s.pts), style: styleText({ closed: closedish && style.fill }) });
+      }
+      add(node);
+      commit();
+    }
+
+    // filled shapes go underneath the lines, so a fill never hides one
+    function add(node) {
+      const filled = (readStyle(node).get('fill') || '').toLowerCase() === GRAY;
+      if (filled) content.insertBefore(node, content.firstChild); else content.appendChild(node);
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  axes: press at the origin, drag out — x and y with arrows and labels
+     * ---------------------------------------------------------------- */
+    function axesParts() {
+      const { o, c } = axes;
+      const dx = c.x - o.x, dy = c.y - o.y, sx = Math.sign(dx) || 1, sy = Math.sign(dy) || -1;
+      const parts = [], tail = 18, color = style.color;
+      const st = `fill:none;stroke:${color};stroke-width:${width()};stroke-linecap:round;stroke-linejoin:round;marker-end:url(#${markerId(color)})`;
+      const label = (x, y) => el('text', { x: r1(x), y: r1(y), style: `font-size:${TEXT_SIZE}px;font-family:serif;fill:${color}` });
+      if (Math.abs(dx) >= 30) {
+        parts.push(el('path', { d: `M ${r1(o.x - tail * sx)} ${r1(o.y)} L ${r1(c.x)} ${r1(o.y)}`, style: st }));
+        const t = label(sx > 0 ? c.x + 10 : c.x - 28, o.y + TEXT_SIZE * 0.35); t.textContent = '$x$'; parts.push(t);
+      }
+      if (Math.abs(dy) >= 30) {
+        parts.push(el('path', { d: `M ${r1(o.x)} ${r1(o.y - tail * sy)} L ${r1(o.x)} ${r1(c.y)}`, style: st }));
+        const t = label(o.x + 12, c.y + TEXT_SIZE * 0.35); t.textContent = '$y$'; parts.push(t);
+      }
+      return parts;
+    }
+
+    function paintAxes() { live.replaceChildren(...axesParts()); }
+
+    function endAxes() {
+      const parts = axesParts();
+      axes = null;
+      live.replaceChildren();
+      showSnapMarks([]);
+      if (!parts.length) return;
+      for (const n of parts) content.appendChild(n);
+      commit();
+      setTool('pen'); // one set of axes, then straight back to drawing
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  eraser: whatever the Pencil passes over goes, whole
+     * ---------------------------------------------------------------- */
+    const OFFSETS = [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4], [4, -4], [-4, 4]];
+    function hits(node, cx, cy) {
+      if (node instanceof SVGGeometryElement) {
+        const m = node.getScreenCTM();
+        if (!m) return false;
+        const inv = m.inverse();
+        const cs = getComputedStyle(node);
+        const filled = cs.fill && cs.fill !== 'none';
+        for (const [dx, dy] of OFFSETS) {
+          const pt = new DOMPoint(cx + dx, cy + dy).matrixTransform(inv);
+          if (node.isPointInStroke(pt) || (filled && node.isPointInFill(pt))) return true;
+        }
+        return false;
+      }
+      if (node instanceof SVGTextElement) {
+        const r = node.getBoundingClientRect();
+        return cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4;
+      }
+      return [...node.children].some(c => hits(c, cx, cy));
+    }
+
+    function eraseAt(cx, cy) {
+      for (const node of items().reverse()) {
+        if (hits(node, cx, cy)) { node.remove(); erasing.gone.push(node); }
+      }
+    }
+
+    function endErase() {
+      const done = erasing;
+      erasing = null;
+      if (done && done.gone.length) commit();
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  select: tap a stroke or draw around several, then drag them
+     * ---------------------------------------------------------------- */
+    function selectionBox() {
+      if (!selection.length) return null;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const n of selection) {
+        const b = pageBox(n);
+        x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
+      }
+      return { x: x0 - 8, y: y0 - 8, w: x1 - x0 + 16, h: y1 - y0 + 16 };
+    }
+
+    function select(list) {
+      selection = list.filter(n => n.isConnected);
+      paintSelection();
+    }
+
+    function paintSelection() {
+      ui.querySelectorAll('.sel-box').forEach(n => n.remove());
+      const menu = $('#selmenu');
+      const box = selectionBox();
+      menu.classList.toggle('hidden', !box || !!picking);
+      if (!box) return;
+      ui.appendChild(el('rect', { class: 'sel-box', x: box.x, y: box.y, width: box.w, height: box.h, rx: 6 }));
+      if (picking) return;
+      const top = pageToClient({ x: box.x + box.w / 2, y: box.y });
+      const bottom = pageToClient({ x: box.x + box.w / 2, y: box.y + box.h });
+      const below = top.y < stage.getBoundingClientRect().top + 60;
+      menu.style.left = Math.max(90, Math.min(innerWidth - 90, top.x)) + 'px';
+      menu.style.top = (below ? bottom.y + 56 : top.y - 8) + 'px';
+    }
+
+    function startPick(e, p) {
+      const box = selectionBox();
+      const inside = box && p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h;
+      if (!inside) {
+        const hit = items().reverse().find(n => hits(n, e.clientX, e.clientY));
+        select(hit ? [hit] : []);
+      }
+      picking = selection.length
+        ? { id: e.pointerId, mode: 'move', last: p, moved: false }
+        : { id: e.pointerId, mode: 'lasso', pts: [p], path: el('path', { class: 'lasso' }) };
+      if (picking.mode === 'lasso') ui.appendChild(picking.path);
+      paintSelection();
+    }
+
+    function movePick(p) {
+      if (picking.mode === 'move') {
+        const dx = p.x - picking.last.x, dy = p.y - picking.last.y;
+        if (!dx && !dy) return;
+        for (const n of selection) translate(n, dx, dy);
+        picking.last = p; picking.moved = true;
+        paintSelection(); paintLabels();
+      } else {
+        picking.pts.push(p);
+        picking.path.setAttribute('d', picking.pts.map((q, i) => (i ? 'L' : 'M') + r1(q.x) + ' ' + r1(q.y)).join(' ') + ' Z');
+      }
+    }
+
+    function endPick() {
+      const done = picking;
+      picking = null;
+      if (done.mode === 'move') { if (done.moved) commit(); paintSelection(); return; }
+      done.path.remove();
+      if (pathLength(done.pts) < 12) { select([]); return; }
+      // everything whose middle lies inside the loop
+      const inside = (p, poly) => {
+        let c = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++)
+          if ((poly[i].y > p.y) !== (poly[j].y > p.y) &&
+            p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) c = !c;
+        return c;
+      };
+      select(items().filter(n => { const b = pageBox(n); return inside({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, done.pts); }));
+    }
+
+    // Move one item. Ours change their own coordinates, so the file stays
+    // plain and labels keep their $…$ typesetting; anything else gets a
+    // translate().
+    function translate(n, dx, dy) {
+      const shift = (name, d) => { if (n.hasAttribute(name)) n.setAttribute(name, r1(+n.getAttribute(name) + d)); };
+      const t = n.getAttribute('transform');
+      const d = n.getAttribute('d');
+      if (!t && n.localName === 'text') {
+        shift('x', dx); shift('y', dy);
+        for (const s of n.querySelectorAll('tspan[x]')) s.setAttribute('x', r1(+s.getAttribute('x') + dx));
+        for (const s of n.querySelectorAll('tspan[y]')) s.setAttribute('y', r1(+s.getAttribute('y') + dy));
+      } else if (!t && (n.localName === 'circle' || n.localName === 'ellipse')) { shift('cx', dx); shift('cy', dy); }
+      else if (!t && n.localName === 'rect') { shift('x', dx); shift('y', dy); }
+      else if (!t && n.localName === 'path' && /^[MLCQZ\d\s.,-]+$/.test(d || '')) {
+        let i = 0;
+        n.setAttribute('d', d.replace(/-?\d*\.?\d+/g, v => r1(+v + (i++ % 2 ? dy : dx))));
+      } else {
+        const m = /^translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)(.*)$/.exec(t || '');
+        n.setAttribute('transform', m ? `translate(${r1(+m[1] + dx)},${r1(+m[2] + dy)})${m[3]}`
+          : `translate(${r1(dx)},${r1(dy)})` + (t ? ' ' + t : ''));
+      }
+    }
+
+    $('#sel-del').onclick = () => {
+      if (!selection.length) return;
+      selection.forEach(n => n.remove());
+      select([]);
+      commit();
+    };
+    $('#sel-dup').onclick = () => {
+      if (!selection.length) return;
+      const copies = selection.map(n => n.cloneNode(true));
+      for (const c of copies) { translate(c, 25, 25); add(c); }
+      select(copies);
+      commit();
+    };
+    for (const id of ['#sel-del', '#sel-dup']) $(id).addEventListener('pointerdown', e => e.stopPropagation());
+
+    // A style button with something selected changes the selection too
+    function restyle(n, key) {
+      if (n.localName === 'g') { for (const c of n.children) restyle(c, key); return; }
+      const st = readStyle(n);
+      const isText = n.localName === 'text';
+      const isDot = n.localName === 'circle' && st.get('stroke') === 'none';
+      const closed = ['rect', 'circle', 'ellipse', 'polygon'].includes(n.localName) || /z\s*$/i.test(n.getAttribute('d') || '');
+      const w = parseFloat(st.get('stroke-width')) || 2.5;
+      const arrows = () => {
+        const c = st.get('stroke') || style.color;
+        st.delete('marker-end'); st.delete('marker-start');
+        if (style.arrow) st.set('marker-end', `url(#${markerId(c)})`);
+        if (style.arrow === 2) st.set('marker-start', `url(#${markerId(c, true)})`);
+      };
+      switch (key) {
+        case 'color':
+          if (isText || isDot) { st.set('fill', style.color); break; }
+          st.set('stroke', style.color);
+          for (const k of ['marker-end', 'marker-start'])
+            if (st.has(k)) st.set(k, `url(#${markerId(style.color, k === 'marker-start')})`);
+          break;
+        case 'thick': {
+          if (isText) break;
+          if (isDot) { n.setAttribute('r', style.thick ? 5 : 3.6); break; }
+          const nw = width();
+          st.set('stroke-width', nw);
+          const dash = st.get('stroke-dasharray');
+          if (dash && dash !== 'none') st.set('stroke-dasharray', dash.startsWith('0.01') ? `0.01,${2.6 * nw}` : `${4 * nw},${3 * nw}`);
+          break;
+        }
+        case 'dashed': case 'dotted': {
+          if (isText || isDot) break;
+          const dash = dashFor(w);
+          if (dash) st.set('stroke-dasharray', dash); else st.delete('stroke-dasharray');
+          break;
+        }
+        case 'arrow': if (!isText && !isDot && !closed) arrows(); break;
+        case 'fill': if (!isText && !isDot) st.set('fill', style.fill ? GRAY : 'none'); break;
+      }
+      writeStyle(n, st);
+      if (key === 'fill' && style.fill && n.parentNode === content) content.insertBefore(n, content.firstChild);
+    }
+
+    function restyleSelection(key) {
+      if (!selection.length || key === 'grid') return;
+      for (const n of selection) restyle(n, key);
+      paintSelection();
+      commit();
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  labels: tap the spot, type on the Mac (snippets included)
+     * ---------------------------------------------------------------- */
+    let label = null; // { node, caret, replacing }
+
+    function askText(p) {
+      cancelText();
+      // tapping an existing label edits it
+      const c = pageToClient(p);
+      const hit = items().reverse().find(n => n instanceof SVGTextElement && hits(n, c.x, c.y));
+      const replacing = hit || null;
+      const at = replacing ? { x: +replacing.getAttribute('x'), y: +replacing.getAttribute('y') } : { x: p.x, y: p.y + TEXT_SIZE * 0.35 };
+      if (replacing) { replacing.style.opacity = '0.25'; paintLabels(); }
+      const node = el('text', {
+        x: r1(at.x), y: r1(at.y),
+        style: `font-size:${TEXT_SIZE}px;font-family:serif;fill:${replacing ? (readStyle(replacing).get('fill') || style.color) : style.color}`
+      });
+      const caret = el('rect', { id: 'caret', x: r1(at.x), y: r1(at.y - TEXT_SIZE * 0.8), width: 2.5, height: TEXT_SIZE });
+      live.append(node, caret);
+      label = { node, caret, replacing };
+      send({ type: 'text-request', text: replacing ? replacing.textContent : '' });
+      setTool('pen'); // one label at a time, then straight back to drawing
+    }
+
+    function previewText(text) {
+      if (!label) return;
+      label.node.textContent = text;
+      const w = text ? label.node.getComputedTextLength() : 0;
+      label.caret.setAttribute('x', r1(+label.node.getAttribute('x') + w + 2));
+    }
+
+    function commitText(text) {
+      if (!label) return;
+      const { node, replacing } = label;
+      label.caret.remove();
+      label = null;
+      if (!text.trim()) {
+        node.remove();
+        if (replacing) { replacing.remove(); commit(); }
+        return;
+      }
+      node.textContent = text;
+      if (replacing) replacing.replaceWith(node); else content.appendChild(node);
+      commit();
+    }
+
+    function cancelText() {
+      if (!label) return;
+      label.node.remove(); label.caret.remove();
+      if (label.replacing) label.replacing.style.opacity = '';
+      label = null;
+      paintLabels();
+    }
+
+    stage.addEventListener('pointerup', () => {
+      if (erasing) endErase();
+      else if (picking) endPick();
+      else if (axes) endAxes();
+      else endStroke();
+    });
+    stage.addEventListener('pointercancel', () => {
+      clearTimeout(hold);
+      if (erasing) endErase();
+      if (picking) { picking.path && picking.path.remove(); picking = null; paintSelection(); }
+      stroke = null; axes = null; live.replaceChildren(); showSnapMarks([]);
+    });
+
+    /* ---------------------------------------------------------------- *
+     *  the bar
+     * ---------------------------------------------------------------- */
+    for (const c of COLORS) {
+      const b = document.createElement('button');
+      b.className = 'swatch';
+      b.dataset.color = c.hex;
+      b.title = c.name[0].toUpperCase() + c.name.slice(1);
+      b.style.background = c.hex;
+      b.onclick = () => { style.color = c.hex; paintBar(); restyleSelection('color'); };
+      $('#swatches').appendChild(b);
+    }
+
+    for (const b of document.querySelectorAll('[data-style]')) {
+      b.addEventListener('pointerdown', e => e.stopPropagation());
+      b.onclick = () => {
+        const k = b.dataset.style;
+        if (k === 'arrow') style.arrow = (style.arrow + 1) % 3;
+        else style[k] = !style[k];
+        if (k === 'dashed' && style.dashed) style.dotted = false;
+        if (k === 'dotted' && style.dotted) style.dashed = false;
+        paintBar();
+        restyleSelection(k === 'dotted' ? 'dashed' : k);
+      };
+    }
+    for (const b of document.querySelectorAll('[data-tool]'))
+      b.onclick = () => setTool(tool === b.dataset.tool && b.dataset.tool !== 'pen' ? 'pen' : b.dataset.tool);
+
+    function setTool(t) {
+      tool = t;
+      for (const k of ['erase', 'text', 'select']) stage.classList.toggle(k, t === k);
+      if (t !== 'select') select([]);
+      paintBar();
+    }
+
+    const ARROW_ICONS = [
+      '<path d="M3 9 H27" fill="none" stroke="#1d2027" stroke-width="2.2" stroke-linecap="round"/>',
+      '<path d="M3 9 H25 M19 4 L26 9 L19 14" fill="none" stroke="#1d2027" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+      '<path d="M5 9 H25 M19 4 L26 9 L19 14 M11 4 L4 9 L11 14" fill="none" stroke="#1d2027" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    ];
+    function paintBar() {
+      for (const b of document.querySelectorAll('[data-style]')) b.classList.toggle('on', !!style[b.dataset.style]);
+      for (const b of document.querySelectorAll('[data-tool]')) b.classList.toggle('on', tool === b.dataset.tool);
+      for (const b of document.querySelectorAll('.swatch')) b.classList.toggle('on', b.dataset.color === style.color);
+      const arrow = $('[data-style=arrow]');
+      arrow.querySelector('svg').innerHTML = ARROW_ICONS[style.arrow];
+      arrow.querySelector('span').textContent = style.arrow === 2 ? 'Both' : 'Arrow';
+    }
+
+    $('#copyprev').onclick = () => send({ type: 'copy-previous' });
+    $('#newfig').onclick = () => send({ type: 'new-figure' });
+
+    function paintStatus() {
+      const s = $('#status'), veil = $('#veil');
+      const esc = t => String(t || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      if (target.kind === 'figure') s.innerHTML = `Drawing into <b>${esc(target.name)}</b> · ${esc(target.label)}`;
+      else if (target.kind === 'new') s.innerHTML = `Draw — a new figure goes in at the caret · ${esc(target.label)}`;
+      else s.textContent = target.label || 'Waiting for Margin…';
+      veil.classList.toggle('hidden', target.kind !== 'none');
+      veil.textContent = target.label || 'Click into a note on the Mac — the figure goes where the caret is';
+      $('#copyprev').disabled = target.kind === 'none';
+      $('#newfig').disabled = target.kind !== 'figure';
+    }
+
+    function flashVeil() {
+      const veil = $('#veil');
+      veil.classList.add('flash');
+      setTimeout(() => veil.classList.remove('flash'), 600);
+    }
+
+    /* ---------------------------------------------------------------- *
+     *  messages from Margin
+     * ---------------------------------------------------------------- */
+    bridge.on(msg => {
+      switch (msg.type) {
+        case 'target': {
+          const same = msg.key === target.key;
+          if (!same || msg.reload) {
+            cancelText();
+            stroke = null; erasing = null; picking = null; axes = null;
+            live.replaceChildren(); ui.replaceChildren(); select([]);
+            if (!same && target.key) histories.set(target.key, Object.assign(history(), { last: snapshot() }));
+            target = msg;
+            load(msg.svg || '');
+            if (msg.reload) histories.delete(msg.key);
+            const h = history();
+            // a file edited elsewhere (Inkscape) starts a fresh history
+            if (!same && h.undo.length && serializeItems(h.last) !== serializeItems(snapshot())) histories.delete(msg.key);
+            history();
+            // land on the drawing, a little below the bar
+            if (content.children.length) scrollY = content.getBBox().y - 60;
+            else if (!same) scrollY = 0;
+            layout();
+          } else target = Object.assign(target, msg);
+          paintStatus(); paintHistory();
+          break;
+        }
+        case 'undo': undo(); break;
+        case 'redo': redo(); break;
+        case 'text-preview': previewText(msg.text); break;
+        case 'text-commit': commitText(msg.text); break;
+        case 'text-cancel': cancelText(); break;
+      }
+    });
+
+    function serializeItems(list) {
+      const s = new XMLSerializer();
+      return list.map(n => s.serializeToString(n)).join('');
+    }
+
+    layout(); paintBar(); paintStatus();
+    send({ type: 'hello' });
+  </script>
+</body>
+
+</html>

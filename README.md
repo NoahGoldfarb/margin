@@ -59,6 +59,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
 | `!` + `Tab` | In a `.tex` file: insert a whole document from a template (`!castel` for another one) |
 | `ggb` + `Tab` | Open GeoGebra for a graph; `Cmd+Enter` (`Ctrl+Enter`), then drag over it to insert that area as a picture |
+| iPad button | Open the drawing pad (on the iPad with Sidecar); the Pencil draws into a figure at the caret |
 | `geo` + `Tab` | The same for geometry: a blank sheet without a coordinate system |
 | `/` | In math: turn what you just typed into a fraction |
 | `Ctrl+O` | Open a PDF |
@@ -176,6 +177,74 @@ graph. That area is saved as a picture next to the document (`lecture.pdf` →
 at most 400 px wide. It is a picture, not a live graph. GeoGebra keeps your
 construction until you quit, so the next `ggb` picks up where you left off.
 `Esc` goes back to the note.
+
+### Figures drawn on the iPad
+
+Connect the iPad with Sidecar (Control Center › Screen Mirroring › the iPad;
+a Lightning or USB-C cable works without any network) and Margin puts its
+drawing pad on the iPad's screen by itself. The **iPad** button in the top bar
+opens and closes it by hand; without a second screen it opens as a floating
+window to try it out.
+
+There is nothing to start or name: pick up the Pencil and draw. The figure goes
+where the caret is in your note.
+
+- **The first stroke** puts a new figure into the note, on its own line —
+  `![Figure](lecture.assets/fig-01.svg)` in Markdown (also in the notes on a
+  PDF), and in a `.tex` file Castel's
+  `\begin{figure}[ht] \centering \incfig{fig-01} \end{figure}`.
+- **Later strokes** go into the same figure while the caret is on its line or
+  on the empty line right below it — which is where the caret lands, so you
+  can draw, put the Pencil down and draw on. Once you type a new paragraph,
+  the next stroke starts the next figure. Click next to an older figure to
+  draw into it again.
+- **The pad** says at the top what it is drawing into, and the Mac shows the
+  figure live in the bottom-right corner.
+
+On the pad:
+
+- **Hold the Pencil still** at the end of a stroke and it becomes a straight
+  line (snapped to 0°/45°/90° when close), circle, ellipse, rectangle,
+  triangle or a few joined straight pieces. A tap is a point.
+- **Lines join up by themselves**: a stroke that starts or ends near another
+  end, a corner or a point lands exactly on it (a small ring shows it), so
+  triangles close and lines meet. **Grid** also puts shapes on the dot grid.
+- **Thick, Dashed, Dotted, Arrow, Fill** — Castel's style table, cut down to
+  the buttons that matter; **Arrow** goes none → at the end → at both ends.
+  Four colours: black, blue, red, green. Gray fills always go underneath the
+  lines.
+- **Select** — tap a stroke, or draw a loop around several. Drag them
+  anywhere; **Duplicate** or **Delete** them; and any style button or colour
+  now changes them, so you can draw first and style afterwards.
+- **Axes** — press at the origin and drag: both axes with arrows and `$x$`,
+  `$y$` labels in one go. Drag in one direction only for a number line.
+- **Text** — tap where the label goes and type it on the Mac, with the
+  snippets; `Enter` places it, `Esc` cancels. Write math as `$x$`: on the pad
+  and in a note KaTeX typesets it, in a `.tex` file LaTeX does, in your
+  document's font. Tap an existing label with Text to change it.
+- **Eraser** — strikes through whole strokes.
+- **Undo / Redo**, or `⌘Z` on the Mac when the last thing you did was a
+  stroke. Undo or erase back to nothing and the figure leaves the note again.
+- **New** starts a new figure below the current one; **Copy prev.** starts
+  it as a copy of the last one, for a picture the lecture builds up step by
+  step.
+
+The page is the width of your note (or of `\columnwidth`) and as long as you
+like; a figure is saved cropped to the height it uses, with its left, middle
+and right where you drew them.
+
+Figures are plain SVG that Inkscape opens as its own:
+`lecture.assets/fig-01.svg` next to a note, `figures/fig-01.svg` next to the
+root `.tex`. For LaTeX, Margin runs Inkscape after every change to write the
+`.pdf` + `.pdf_tex` that `\incfig` imports (both hidden in the sidebar), and
+recompiles. A document without `\incfig` gets it added before
+`\begin{document}`, together with `import`, `transparent` and `xcolor`. To
+polish a figure afterwards, click next to it and press **Inkscape** in the
+corner preview; what you save in Inkscape comes back into the note and the PDF.
+
+Needs [Inkscape](https://inkscape.org) for `.tex` files (Markdown notes don't).
+On the iPad, Settings › Displays › the iPad › *Show Sidebar* off gives the pad
+the whole screen.
 
 ### Picture size
 

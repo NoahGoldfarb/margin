@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const { execFile, spawn } = require('child_process');
@@ -91,6 +91,10 @@ function createWindow() {
     workspace = { folder: null, tabs: [], active: null, expanded: [] };
     saveWindowState();
   });
+  // the pad belongs to a Margin window; it goes when the last one does
+  win.on('closed', () => {
+    if (!BrowserWindow.getAllWindows().some(w => w !== padWin)) closePad();
+  });
   win.loadFile(path.join(__dirname, 'index.html'));
 }
 
@@ -101,7 +105,7 @@ app.whenReady().then(async () => {
   buildMenu();
   createWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!BrowserWindow.getAllWindows().some(w => w !== padWin)) createWindow();
   });
 });
 
@@ -191,7 +195,7 @@ ipcMain.handle('open-folder', async () => {
 // Same for pictures pasted into notes (lecture.assets/) and LaTeX's build files.
 const isSidecar = name => /\.margin\.(json|webm|ogg|m4a|mp3|wav)$/i.test(name);
 const isBuildFile = name =>
-  /\.(aux|log|fls|fdb_latexmk|synctex\.gz|synctex|synctex\(busy\)|out|toc|lof|lot|bbl|blg|bcf|run\.xml|nav|snm|vrb|xdv|thm)$/i.test(name);
+  /\.(aux|log|fls|fdb_latexmk|synctex\.gz|synctex|synctex\(busy\)|out|toc|lof|lot|bbl|blg|bcf|run\.xml|nav|snm|vrb|xdv|thm|pdf_tex)$/i.test(name);
 const isHidden = e => e.name.startsWith('.') || isSidecar(e.name) || isBuildFile(e.name) ||
   (e.isDirectory() && /\.assets$/i.test(e.name));
 
@@ -200,8 +204,11 @@ const isHidden = e => e.name.startsWith('.') || isSidecar(e.name) || isBuildFile
 ipcMain.handle('read-dir', async (_e, dir) => {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
+    // a figure's .pdf is Inkscape's export of its .svg, not a document
+    const names = new Set(entries.map(e => e.name));
+    const isExport = e => /\.pdf$/i.test(e.name) && names.has(e.name.slice(0, -4) + '.svg') && names.has(e.name + '_tex');
     return entries
-      .filter(e => !isHidden(e))
+      .filter(e => !isHidden(e) && !isExport(e))
       .map(e => ({ name: e.name, path: path.join(dir, e.name), isDir: e.isDirectory() }))
       // numeric so lecture2 sorts before lecture10, which is the whole point
       // of numbering your lectures
@@ -529,4 +536,153 @@ ipcMain.handle('synctex-edit', async (_e, pdf, page, x, y) => {
   const input = field(out, 'Input'), line = +field(out, 'Line');
   if (!input || !line) return null;
   return { path: path.resolve(path.dirname(pdf), input), line };
+});
+
+// ---- the drawing pad: a window on the iPad (Sidecar) that draws into the note ----
+// The pad never takes the keyboard (focusable: false), so the caret stays in
+// the note while the Pencil draws — put it down and keep typing. Messages go
+// pad <-> main process <-> the Margin window that owns the pad.
+
+let padWin = null, padOwner = null;
+
+// Sidecar's screen is named after the iPad ("… iPad", "Sidecar Display")
+const isPadDisplay = d => /ipad|sidecar/i.test(d.label || '');
+
+function padDisplay() {
+  const primary = screen.getPrimaryDisplay();
+  const all = screen.getAllDisplays();
+  return all.find(isPadDisplay) || all.find(d => d.id !== primary.id) || null;
+}
+
+function sendToOwner(channel, msg) {
+  const owner = padOwner && !padOwner.isDestroyed() ? padOwner : BrowserWindow.getAllWindows().find(w => w !== padWin);
+  if (owner && !owner.isDestroyed()) owner.webContents.send(channel, msg);
+}
+
+function openPad(display = padDisplay()) {
+  if (padWin) { padWin.showInactive(); return; }
+  // on the iPad: the whole screen, no frame. Without one: a window to try it
+  // out, floating above Margin so it never ends up hidden behind it
+  const place = display ? { ...display.workArea, frame: false } : { width: 1000, height: 720, alwaysOnTop: true };
+  padWin = new BrowserWindow({
+    ...place,
+    title: 'Margin Pad',
+    backgroundColor: '#ffffff',
+    focusable: false,
+    acceptFirstMouse: true,
+    fullscreenable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'pad-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false // a covered pad must still take every stroke
+    }
+  });
+  padWin.padDisplayId = display ? display.id : null;
+  padWin.loadFile(path.join(__dirname, 'pad.html'));
+  padWin.once('ready-to-show', () => padWin && padWin.showInactive());
+  padWin.on('closed', () => { padWin = null; sendToOwner('pad-state', { open: false }); });
+  sendToOwner('pad-state', { open: true });
+}
+
+function closePad() { if (padWin) padWin.close(); }
+
+ipcMain.handle('pad-toggle', e => {
+  padOwner = BrowserWindow.fromWebContents(e.sender);
+  if (padWin) closePad(); else openPad();
+  return !!padWin;
+});
+ipcMain.handle('pad-open', () => !!padWin);
+
+ipcMain.on('pad', (e, msg) => {
+  if (padWin && e.sender === padWin.webContents) sendToOwner('pad', msg);
+  else {
+    padOwner = BrowserWindow.fromWebContents(e.sender);
+    if (padWin) padWin.webContents.send('pad', msg);
+  }
+});
+
+// plug the iPad in (Sidecar) and the pad is there; unplug it and it goes
+function watchDisplays() {
+  screen.on('display-added', (_e, d) => { if (isPadDisplay(d)) openPad(d); });
+  screen.on('display-removed', (_e, d) => { if (padWin && padWin.padDisplayId === d.id) closePad(); });
+  const ipad = screen.getAllDisplays().find(isPadDisplay);
+  if (ipad) openPad(ipad);
+}
+app.whenReady().then(() => setTimeout(watchDisplays, 800)); // after the main window
+
+// ---- figures: saved as SVG; in LaTeX also exported to .pdf + .pdf_tex by Inkscape ----
+
+function inkscapeBinary() {
+  const bundle = '/Applications/Inkscape.app/Contents/MacOS/inkscape';
+  return require('fs').existsSync(bundle) ? bundle : 'inkscape'; // else PATH (brew install inkscape)
+}
+
+const lastWritten = new Map();   // figure path -> the text Margin last wrote there
+const exportTimers = new Map();  // figure path -> pending export
+
+function exportFigure(svgPath) {
+  const pdf = svgPath.replace(/\.svg$/i, '.pdf');
+  return new Promise(resolve => {
+    execFile(inkscapeBinary(), [svgPath, '--export-area-page', '--export-dpi', '300',
+      '--export-type=pdf', '--export-latex', '--export-filename', pdf],
+    { env: { ...process.env, PATH: TEX_PATH }, timeout: 60000 },
+    err => resolve(err ? (err.code === 'ENOENT' ? 'Inkscape not found — install it from inkscape.org' : err.message) : null));
+  });
+}
+
+// Castel's file watcher: after a save, the pdf + pdf_tex follow on their own
+function scheduleExport(svgPath, { delay = 400 } = {}) {
+  clearTimeout(exportTimers.get(svgPath));
+  exportTimers.set(svgPath, setTimeout(async () => {
+    exportTimers.delete(svgPath);
+    const error = await exportFigure(svgPath);
+    sendToOwner('figure-exported', { path: svgPath, error });
+  }, delay));
+}
+
+ipcMain.handle('figure-save', async (_e, p, svg, opts = {}) => {
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p + '.tmp', svg, 'utf8');
+  await fs.rename(p + '.tmp', p);
+  lastWritten.set(p, svg);
+  if (opts.tex) {
+    if (opts.now) { // the first save: \incfig needs the pdf_tex before it compiles
+      clearTimeout(exportTimers.get(p)); exportTimers.delete(p);
+      return { error: await exportFigure(p) };
+    }
+    scheduleExport(p);
+  }
+  return { error: null };
+});
+
+ipcMain.handle('figure-exists', async (_e, p) => fs.access(p).then(() => true).catch(() => false));
+
+// Polishing a figure afterwards: open it in Inkscape and follow its saves
+const watched = new Map(); // figure path -> { tex }
+ipcMain.handle('figure-inkscape', async (_e, p, tex) => {
+  const known = watched.get(p);
+  watched.set(p, { tex: !!tex });
+  if (!known) {
+    let timer = 0;
+    try {
+      require('fs').watch(path.dirname(p), (_ev, name) => {
+        if (name !== path.basename(p)) return;
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const text = await fs.readFile(p, 'utf8').catch(() => null);
+          if (text == null || text === lastWritten.get(p)) return; // our own write
+          lastWritten.set(p, text);
+          if (watched.get(p).tex) scheduleExport(p, { delay: 0 });
+          sendToOwner('figure-changed', { path: p, svg: text });
+        }, 300);
+      });
+    } catch { /* the folder is gone; nothing to follow */ }
+  }
+  const bin = inkscapeBinary();
+  if (process.platform === 'darwin' && bin.startsWith('/Applications/'))
+    execFile('open', ['-a', 'Inkscape', p], () => { });
+  else spawn(bin, [p], { detached: true, stdio: 'ignore', env: { ...process.env, PATH: TEX_PATH } }).unref();
+  return true;
 });
