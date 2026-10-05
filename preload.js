@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('margin', {
   onPadState:      cb => ipcRenderer.on('pad-state', (_e, s) => cb(s)),
   figureSave:      (p, svg, opts)   => ipcRenderer.invoke('figure-save', p, svg, opts),
   figureExists:    p                => ipcRenderer.invoke('figure-exists', p),
+  readBinary:      p                => ipcRenderer.invoke('read-binary', p),
   figureInkscape:  (p, tex)         => ipcRenderer.invoke('figure-inkscape', p, tex),
   onFigureChanged: cb => ipcRenderer.on('figure-changed', (_e, m) => cb(m)),
   onFigureExported: cb => ipcRenderer.on('figure-exported', (_e, m) => cb(m))

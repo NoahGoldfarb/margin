@@ -657,6 +657,11 @@ ipcMain.handle('figure-save', async (_e, p, svg, opts = {}) => {
   return { error: null };
 });
 
+// a GeoGebra picture the pad draws on: its bytes, to embed in the figure
+ipcMain.handle('read-binary', async (_e, p) => {
+  try { return new Uint8Array(await fs.readFile(p)); } catch { return null; }
+});
+
 ipcMain.handle('figure-exists', async (_e, p) => fs.access(p).then(() => true).catch(() => false));
 
 // Polishing a figure afterwards: open it in Inkscape and follow its saves

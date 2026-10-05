@@ -378,6 +378,10 @@
       `<marker id="${markerId(c.hex, true)}" orient="auto" markerUnits="strokeWidth" style="overflow:visible">` +
       `<path d="M 4.2,-2.1 L -1.1,0 L 4.2,2.1 Z" style="fill:${c.hex};stroke:none"/></marker>`).join('');
 
+    // Inkscape's lock: a GeoGebra picture under the drawing stays where it is
+    const SODIPODI = 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd';
+    const isLocked = n => n.getAttributeNS(SODIPODI, 'insensitive') === 'true';
+
     const $ = s => document.querySelector(s);
     const view = $('#view'), content = $('#content'), live = $('#live'), ui = $('#ui'), stage = $('#stage');
     view.querySelector('defs').insertAdjacentHTML('beforeend', MARKERS);
@@ -920,9 +924,10 @@
     }
 
     // filled shapes go underneath the lines, so a fill never hides one
+    // …but above a locked picture, which stays at the very bottom
     function add(node) {
       const filled = (readStyle(node).get('fill') || '').toLowerCase() === GRAY;
-      if (filled) content.insertBefore(node, content.firstChild); else content.appendChild(node);
+      if (filled) content.insertBefore(node, items().find(n => !isLocked(n)) || null); else content.appendChild(node);
     }
 
     /* ---------------------------------------------------------------- *
@@ -983,7 +988,7 @@
     }
 
     function eraseAt(cx, cy) {
-      for (const node of items().reverse()) {
+      for (const node of items().reverse().filter(n => !isLocked(n))) {
         if (hits(node, cx, cy)) { node.remove(); erasing.gone.push(node); }
       }
     }
@@ -1031,7 +1036,7 @@
       const box = selectionBox();
       const inside = box && p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h;
       if (!inside) {
-        const hit = items().reverse().find(n => hits(n, e.clientX, e.clientY));
+        const hit = items().reverse().find(n => !isLocked(n) && hits(n, e.clientX, e.clientY));
         select(hit ? [hit] : []);
       }
       picking = selection.length
@@ -1068,7 +1073,11 @@
             p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) c = !c;
         return c;
       };
-      select(items().filter(n => { const b = pageBox(n); return inside({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, done.pts); }));
+      select(items().filter(n => {
+        if (isLocked(n)) return false;
+        const b = pageBox(n);
+        return inside({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, done.pts);
+      }));
     }
 
     // Move one item. Ours change their own coordinates, so the file stays
@@ -1149,7 +1158,7 @@
         case 'fill': if (!isText && !isDot) st.set('fill', style.fill ? GRAY : 'none'); break;
       }
       writeStyle(n, st);
-      if (key === 'fill' && style.fill && n.parentNode === content) content.insertBefore(n, content.firstChild);
+      if (key === 'fill' && style.fill && n.parentNode === content) content.insertBefore(n, items().find(c => !isLocked(c) && c !== n) || null);
     }
 
     function restyleSelection(key) {

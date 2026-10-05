@@ -2550,7 +2550,8 @@
         <dt>iPad</dt>
         <dd>Draw with the Pencil on the iPad (Sidecar) — the figure lands at the caret, and later strokes go on into it.
           Hold the Pencil still at the end of a stroke to make it a straight line, circle or rectangle; ends join up by themselves.
-          Select moves and restyles, Axes draws both axes in one drag; ⌘Z undoes the last stroke</dd>
+          Select moves and restyles, Axes draws both axes in one drag; ⌘Z undoes the last stroke.
+          With the pad open, tap a GeoGebra picture to draw on top of it</dd>
         <dt>/</dt>
         <dd>In math, turn what you just typed (or selected) into a fraction</dd>
         <dt>Esc</dt>
@@ -6721,6 +6722,8 @@
     const TEX_FIG = /\\incfig(?:\[[^\]]*\])?\{([^}]+)\}/;
     const TEX_FIG_ALL = /\\incfig(?:\[[^\]]*\])?\{([^}]+)\}/g;
     const MD_FIG_ALL = /!\[[^\]\n]*\]\(([^)\s]+\.svg)\)/gi;
+    // a GeoGebra picture: the pad draws on top of it, and it becomes an SVG
+    const MD_GGB = /!\[[^\]\n]*\]\(([^)\s]*ggb-[^)\s\/]*\.png)\)/i;
 
     function lineAt(value, pos) {
       const start = value.lastIndexOf('\n', pos - 1) + 1;
@@ -6786,7 +6789,10 @@
       if (!tex) {
         const m = MD_FIG.exec(here.text);
         const path = m && mdFigurePath(doc, m[1]);
-        return path ? { path, name: path.split('/').pop().replace(/\.svg$/i, '') } : null;
+        if (path) return { path, name: path.split('/').pop().replace(/\.svg$/i, '') };
+        const g = MD_GGB.exec(here.text);
+        const png = g && mdFigurePath(doc, g[1]);
+        return png ? { path: png.replace(/\.png$/i, '.svg'), name: 'GeoGebra graph', raster: png } : null;
       }
       let m = TEX_FIG.exec(here.text);
       if (!m) {
@@ -6811,11 +6817,13 @@
       const label = src.doc.split('/').pop();
       const fig = figureAtCaret(src);
       if (fig) {
-        const key = pad.keys.get(fig.path) || 'fig:' + fig.path;
+        const key = pad.keys.get(fig.path) || (fig.raster ? 'ggb:' : 'fig:') + fig.path;
+        pad.keys.set(fig.path, key);
         if (!pad.figures.has(key)) pad.figures.set(key, {
-          path: fig.path, name: fig.name, tex: src.tex, doc: src.doc, source: src.source, created: false
+          path: fig.path, name: fig.name, tex: src.tex, doc: src.doc, source: src.source, created: false,
+          raster: fig.raster || null, converted: false
         });
-        return { kind: 'figure', key, path: fig.path, name: fig.name, label, src };
+        return { kind: 'figure', key, path: fig.path, name: fig.name, raster: fig.raster || null, label, src };
       }
       if (!pad.newKey) pad.newKey = 'new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       pad.places.set(pad.newKey, src);
@@ -6828,6 +6836,45 @@
         if (text != null) pad.svgs.set(path, text);
       }
       return pad.svgs.get(path) || '';
+    }
+
+    // A GeoGebra picture as the start of a figure: the PNG embedded across the
+    // page's full width, locked (Inkscape's own flag) so the eraser and Select
+    // leave it alone. "|300" in the note keeps it the size it was.
+    async function rasterSvg(png, svgPath) {
+      if (pad.svgs.has(svgPath)) return pad.svgs.get(svgPath);
+      const bytes = await window.margin.readBinary(png);
+      if (!bytes) return '';
+      let w = 1, h = 1;
+      try { const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' })); w = bmp.width; h = bmp.height; bmp.close(); }
+      catch { return ''; }
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const H = Math.round(1000 * h / w);
+      const svg = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+        `xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" width="1000" height="${H}" viewBox="0 0 1000 ${H}">\n` +
+        `<g id="figure">\n<image x="0" y="0" width="1000" height="${H}" preserveAspectRatio="none" sodipodi:insensitive="true" ` +
+        `xlink:href="data:image/png;base64,${btoa(bin)}"/>\n</g>\n</svg>\n`;
+      pad.svgs.set(svgPath, svg);
+      return svg;
+    }
+
+    // The first stroke on a GeoGebra picture: the figure is written as SVG and
+    // the note points at it instead of the PNG (which stays, untouched)
+    async function convertRaster(fig, svg) {
+      await window.margin.figureSave(fig.path, svg, { tex: false });
+      fig.converted = true;
+      pad.svgs.set(fig.path, svg);
+      const source = fig.source, png = fig.raster.split('/').pop();
+      const at = source.value.indexOf(png + ')');
+      if (at >= 0 && source.isConnected) {
+        const from = at + png.length - 4, start = source.selectionStart, end = source.selectionEnd;
+        editText(source, from, from + 4, '.svg');
+        source.setSelectionRange(start, end); // same length: the caret stays put
+      }
+      refreshFigureImages(fig.path);
+      schedulePadSync();
     }
 
     let padSyncTimer = 0, padSyncSeq = 0;
@@ -6846,7 +6893,7 @@
       const sig = [t.kind, t.key, t.label, t.name].join('|');
       if (sig !== pad.sent || reload) {
         const known = pad.sent.split('|')[1] === t.key && t.key && !reload;
-        const svg = t.kind === 'figure' && !known ? await figureSvg(t.path) : '';
+        const svg = t.kind === 'figure' && !known ? await (t.raster ? rasterSvg(t.raster, t.path) : figureSvg(t.path)) : '';
         if (seq !== padSyncSeq) return; // the caret moved on meanwhile
         window.margin.padSend({ type: 'target', key: t.key, kind: t.kind, name: t.name || '', label: t.label, svg, reload });
         pad.sent = sig;
@@ -6883,6 +6930,7 @@
         await createFigure(msg.key, src, msg.svg);
         return;
       }
+      if (fig.raster && !fig.converted) { await convertRaster(fig, msg.svg); return; }
       if (msg.empty && fig.created) { await removeFigure(msg.key, fig); return; }
       pad.svgs.set(fig.path, msg.svg);
       paintPadLive();
@@ -7120,7 +7168,7 @@
     // called by renderMarkdown for every picture: figures get their latest version
     function decorateFigureImg(img) {
       const path = fileOfImg(img);
-      if (!/\/fig-\d+\.svg$/i.test(path)) return;
+      if (!/\/(fig-\d+|ggb-[^/]*)\.svg$/i.test(path)) return;
       img.classList.add('pad-figure');
       img.dataset.figure = path;
       const v = pad.versions.get(path);
@@ -7180,6 +7228,29 @@
       img.onload = fit;
       if (!wrap._labelFit) { wrap._labelFit = new ResizeObserver(fit); wrap._labelFit.observe(img); }
     }
+
+    // With the pad open, a tap on a picture in a rendered note puts the caret
+    // on that picture's line — so the Pencil draws into it (a GeoGebra
+    // picture, or a figure). Without the pad a tap does what it always did.
+    document.addEventListener('click', e => {
+      const img = pad.open && e.target.closest && e.target.closest('.note-render img');
+      if (!img) return;
+      const rendered = img.closest('.note-render');
+      const source = rendered && rendered.parentElement.querySelector('textarea');
+      const file = fileOfImg(img);
+      if (!source || !file) return;
+      setTimeout(() => { // after the click has opened the editor
+        const doc = docOf(source);
+        for (const m of source.value.matchAll(/!\[[^\]\n]*\]\(([^)\s]+)\)/g)) {
+          if (mdFigurePath(doc, m[1]) !== file) continue;
+          const end = lineAt(source.value, m.index).end;
+          source.focus({ preventScroll: true });
+          source.setSelectionRange(end, end);
+          schedulePadSync();
+          return;
+        }
+      }, 0);
+    }, true);
 
     async function togglePad() {
       if (!hasShell || !window.margin.padToggle) { toast('The iPad pad needs the desktop app'); return; }

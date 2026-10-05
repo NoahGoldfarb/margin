@@ -200,6 +200,12 @@ where the caret is in your note.
   draw into it again.
 - **The pad** says at the top what it is drawing into, and the Mac shows the
   figure live in the bottom-right corner.
+- **On a GeoGebra picture**: with the pad open, tap a `ggb` picture in the
+  note and the Pencil draws on top of the graph — to mark a point, shade an
+  area, add an arrow. The graph sits underneath, locked: the eraser and Select
+  leave it alone. With the first stroke `ggb-….png` becomes `ggb-….svg` with
+  the graph inside, at the same size in the note (the PNG stays where it
+  was). Without the pad, tapping a picture does what it always did.
 
 On the pad:
 
