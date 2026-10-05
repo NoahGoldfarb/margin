@@ -227,7 +227,8 @@ On the pad:
 - **Text** — tap where the label goes and type it on the Mac, with the
   snippets; `Enter` places it, `Esc` cancels. Write math as `$x$`: on the pad
   and in a note KaTeX typesets it, in a `.tex` file LaTeX does, in your
-  document's font. Tap an existing label with Text to change it.
+  document's font. The pad typesets it as you type, so you see the label as
+  it will be. Tap an existing label with Text to change it.
 - **Eraser** — strikes through whole strokes.
 - **Undo / Redo**, or `⌘Z` on the Mac when the last thing you did was a
   stroke. Undo or erase back to nothing and the figure leaves the note again.

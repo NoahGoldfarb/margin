@@ -141,8 +141,13 @@
     }
 
     /* $…$ labels typeset over the drawing; the SVG text stays for the file */
-    #content text[data-math] {
+    #view text[data-math] {
       fill-opacity: 0
+    }
+
+    /* a label being retyped makes way for the copy in the works */
+    #view text[data-editing] {
+      visibility: hidden
     }
 
     #labels {
@@ -152,11 +157,13 @@
       pointer-events: none;
     }
 
-    #labels span {
+    /* only the label itself: KaTeX's own spans must stay where KaTeX puts them */
+    #labels>span {
       position: absolute;
       transform: translateY(-78%);
       line-height: 1;
-      white-space: nowrap
+      white-space: nowrap;
+      font-family: KaTeX_Main, "Times New Roman", serif
     }
 
     #stage {
@@ -232,7 +239,14 @@
     }
 
     #caret {
-      fill: var(--accent)
+      fill: var(--accent);
+      animation: blink 1.1s step-end infinite
+    }
+
+    @keyframes blink {
+      50% {
+        fill-opacity: 0
+      }
     }
 
     /* what to do with the selection, right above it */
@@ -410,15 +424,36 @@
       paintLabels();
     }
 
-    // Labels with $…$ typeset by KaTeX, laid over the drawing where the text sits
+    // Labels with $…$ typeset by KaTeX, laid over the drawing where the text
+    // sits — the one being typed too, so it looks while typing as it will
+    const typeset = new Map(); // label text -> KaTeX's HTML; scrolling repaints, it need not re-typeset
+    const escHtml = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    function labelHtml(text, typing) {
+      const key = (typing ? '1' : '0') + text;
+      let html = typeset.get(key);
+      if (html === undefined) {
+        html = text.split(/(\$[^$]+\$)/).map(part => {
+          if (!/^\$[^$]+\$$/.test(part)) return escHtml(part);
+          // half-typed math (\fra…) shows as typed, not as a red error
+          try { return katex.renderToString(part.slice(1, -1), { throwOnError: typing }); }
+          catch { return escHtml(part); }
+        }).join('');
+        if (typeset.size > 500) typeset.clear();
+        typeset.set(key, html);
+      }
+      return html;
+    }
+
     function paintLabels() {
       const box = $('#labels');
       box.replaceChildren();
-      if (!window.katex) return;
+      const typing = label && label.node;
+      if (typing) label.span = null;
+      if (!window.katex) { if (typing) placeCaret(); return; }
       const top = stage.getBoundingClientRect().top;
-      for (const t of content.querySelectorAll('text')) {
+      for (const t of [...content.querySelectorAll('text'), ...(typing ? [typing] : [])]) {
         const text = t.textContent;
-        if (!text.includes('$') || t.closest('[transform]') || t.style.opacity) { t.removeAttribute('data-math'); continue; }
+        if (!text.includes('$') || t.closest('[transform]') || t.hasAttribute('data-editing')) { t.removeAttribute('data-math'); continue; }
         t.setAttribute('data-math', '');
         const at = pageToClient({ x: +t.getAttribute('x'), y: +t.getAttribute('y') });
         const size = parseFloat((/font-size:\s*([\d.]+)/.exec(t.getAttribute('style') || '') || [])[1]) || TEXT_SIZE;
@@ -427,13 +462,15 @@
         span.style.top = at.y - top + 'px';
         span.style.fontSize = size * scale() * 0.92 + 'px';
         span.style.color = (/fill:\s*(#[0-9a-f]{3,6})/i.exec(t.getAttribute('style') || '') || [])[1] || '#000';
-        span.innerHTML = text.split(/(\$[^$]+\$)/).map(part => /^\$[^$]+\$$/.test(part)
-          ? katex.renderToString(part.slice(1, -1), { throwOnError: false })
-          : part.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))).join('');
+        span.innerHTML = labelHtml(text, t === typing);
         box.appendChild(span);
+        if (t === typing) label.span = span;
       }
+      if (typing) placeCaret();
     }
     window.addEventListener('load', () => paintLabels());
+    // KaTeX's fonts arrive on first use: the caret moves to where the label really ends
+    document.fonts.addEventListener('loadingdone', () => paintLabels());
     window.addEventListener('resize', layout);
     stage.addEventListener('wheel', e => {
       e.preventDefault();
@@ -699,9 +736,16 @@
      *  the content, its history, and the file it becomes
      * ---------------------------------------------------------------- */
     const items = () => [...content.children];
-    const snapshot = () => items().map(n => n.cloneNode(true));
+    const snapshot = () => items().map(n => { const c = n.cloneNode(true); c.removeAttribute('data-editing'); return c; });
     function restore(snap) {
       content.replaceChildren(...snap.map(n => n.cloneNode(true)));
+      // undo while a label is being retyped: it still replaces its old self
+      if (label && label.replacing) {
+        const was = label.replacing;
+        const same = items().find(n => n.localName === 'text' && n.textContent === was.textContent &&
+          n.getAttribute('x') === was.getAttribute('x') && n.getAttribute('y') === was.getAttribute('y'));
+        if (same) { same.setAttribute('data-editing', ''); label.replacing = same; }
+      }
     }
     function history() {
       let h = histories.get(target.key);
@@ -777,7 +821,7 @@
       const g = doc.createElementNS(SVGNS, 'g');
       g.setAttribute('id', 'figure');
       for (const n of items()) { g.appendChild(doc.createTextNode('\n')); g.appendChild(doc.importNode(n, true)); }
-      for (const n of g.querySelectorAll('[data-math]')) n.removeAttribute('data-math');
+      for (const n of g.querySelectorAll('[data-math], [data-editing]')) { n.removeAttribute('data-math'); n.removeAttribute('data-editing'); }
       g.appendChild(doc.createTextNode('\n'));
       root.append(doc.createTextNode('\n'), defs, doc.createTextNode('\n'), g, doc.createTextNode('\n'));
       return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc) + '\n';
@@ -1171,53 +1215,79 @@
     /* ---------------------------------------------------------------- *
      *  labels: tap the spot, type on the Mac (snippets included)
      * ---------------------------------------------------------------- */
-    let label = null; // { node, caret, replacing }
+    let label = null; // { node, caret, replacing, span (its typeset overlay), frame }
 
     function askText(p) {
       cancelText();
-      // tapping an existing label edits it
+      // tapping an existing label edits it: it makes way for the copy being typed
       const c = pageToClient(p);
       const hit = items().reverse().find(n => n instanceof SVGTextElement && hits(n, c.x, c.y));
       const replacing = hit || null;
       const at = replacing ? { x: +replacing.getAttribute('x'), y: +replacing.getAttribute('y') } : { x: p.x, y: p.y + TEXT_SIZE * 0.35 };
-      if (replacing) { replacing.style.opacity = '0.25'; paintLabels(); }
+      if (replacing) replacing.setAttribute('data-editing', '');
       const node = el('text', {
         x: r1(at.x), y: r1(at.y),
         style: `font-size:${TEXT_SIZE}px;font-family:serif;fill:${replacing ? (readStyle(replacing).get('fill') || style.color) : style.color}`
       });
+      node.textContent = replacing ? replacing.textContent : '';
       const caret = el('rect', { id: 'caret', x: r1(at.x), y: r1(at.y - TEXT_SIZE * 0.8), width: 2.5, height: TEXT_SIZE });
       live.append(node, caret);
-      label = { node, caret, replacing };
-      send({ type: 'text-request', text: replacing ? replacing.textContent : '' });
+      label = { node, caret, replacing, span: null, frame: 0 };
+      paintLabels();
+      send({ type: 'text-request', text: node.textContent });
       setTool('pen'); // one label at a time, then straight back to drawing
     }
 
+    // The caret after the last letter: of the typeset label, or of the SVG text
+    function placeCaret() {
+      const { node, caret, span } = label;
+      const x = span ? clientToPage(span.getBoundingClientRect().right, 0).x
+        : +node.getAttribute('x') + (node.textContent ? node.getComputedTextLength() : 0);
+      caret.setAttribute('x', r1(x + 2));
+      // typing shows it steady; it blinks again once the keys stop
+      caret.style.animation = 'none';
+      void caret.getBBox();
+      caret.style.animation = '';
+    }
+
+    // Every key on the Mac sends the whole label; only the newest gets
+    // painted, once per frame, so a fast typist never waits on the pad
     function previewText(text) {
       if (!label) return;
-      label.node.textContent = text;
-      const w = text ? label.node.getComputedTextLength() : 0;
-      label.caret.setAttribute('x', r1(+label.node.getAttribute('x') + w + 2));
+      label.text = text;
+      if (label.frame) return;
+      label.frame = requestAnimationFrame(() => {
+        if (!label) return;
+        label.frame = 0;
+        if (label.node.textContent === label.text) return;
+        label.node.textContent = label.text;
+        paintLabels();
+      });
     }
 
     function commitText(text) {
       if (!label) return;
       const { node, replacing } = label;
+      cancelAnimationFrame(label.frame);
       label.caret.remove();
       label = null;
+      // an undo meanwhile may have taken the old label away: the new one still lands
+      const old = replacing && replacing.isConnected ? replacing : null;
       if (!text.trim()) {
         node.remove();
-        if (replacing) { replacing.remove(); commit(); }
+        if (old) { old.remove(); commit(); } else paintLabels();
         return;
       }
       node.textContent = text;
-      if (replacing) replacing.replaceWith(node); else content.appendChild(node);
+      if (old) old.replaceWith(node); else content.appendChild(node);
       commit();
     }
 
     function cancelText() {
       if (!label) return;
+      cancelAnimationFrame(label.frame);
       label.node.remove(); label.caret.remove();
-      if (label.replacing) label.replacing.style.opacity = '';
+      if (label.replacing) label.replacing.removeAttribute('data-editing');
       label = null;
       paintLabels();
     }
