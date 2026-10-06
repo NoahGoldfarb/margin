@@ -113,8 +113,9 @@
       fill: #fff
     }
 
-    #bar button.on svg .fillable {
-      fill: #8a8f99
+    #bar button.on svg .fillable * {
+      fill: #fff;
+      stroke: none
     }
 
     /* the colours: four round swatches in a square, the one in use ringed */
@@ -329,8 +330,8 @@
       <svg viewBox="0 0 30 18"><path d="M4 9 H27" stroke="#1d2027" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.01 5.5"/></svg>Dotted</button>
     <button data-style="arrow" title="Arrow: none → at the end → at both ends">
       <svg viewBox="0 0 30 18"></svg><span>Arrow</span></button>
-    <button data-style="fill" title="Gray fill for closed shapes">
-      <svg viewBox="0 0 30 18"><ellipse class="fillable" cx="15" cy="9" rx="11" ry="7" fill="#d9d9d9" stroke="#1d2027" stroke-width="2"/></svg>Fill</button>
+    <button data-style="fill" title="Fill closed shapes in their colour, see-through — overlaps come out darker → hatched → none">
+      <svg viewBox="0 0 30 18"></svg><span>Fill</span></button>
     <span class="sep"></span>
     <span id="swatches"></span>
     <span class="sep"></span>
@@ -369,7 +370,8 @@
     'use strict';
     const SVGNS = 'http://www.w3.org/2000/svg';
     const W = 1000;                    // page width in units; the note's full width
-    const GRAY = '#d9d9d9';
+    const GRAY = '#d9d9d9';            // the old opaque fill, still read in older figures
+    const FILL_ALPHA = 0.15;           // a fill is its shape's colour, see-through: overlaps come out darker
     const TEXT_SIZE = 28;              // ≈ 10pt once 1000 units become \columnwidth
     const HOLD_MS = 450;               // keep the Pencil still this long to snap a shape
     const GRID = 25;                   // the dot grid; dots sit at 12.5 + 25k
@@ -381,17 +383,28 @@
       { name: 'green', hex: '#23884a' }
     ];
 
-    // Arrow heads, scaled with the stroke, one pair per colour: "arrow" (the
-    // end) and "arrow-start". Inkscape keeps markers as they are.
-    const markerId = (hex, start) => {
-      const c = COLORS.find(c => c.hex === hex.toLowerCase()) || COLORS[0];
-      return 'arrow' + (start ? '-start' : '') + (c.name === 'black' ? '' : '-' + c.name);
+    const colorName = hex => {
+      const c = COLORS.find(c => c.hex === String(hex).toLowerCase()) || COLORS[0];
+      return c.name === 'black' ? '' : '-' + c.name;
     };
-    const MARKERS = COLORS.map(c =>
+
+    // Arrow heads, scaled with the stroke, one pair per colour: "arrow" (the
+    // end) and "arrow-start" — LaTeX's curved head, not a plain triangle.
+    // Inkscape keeps markers as they are.
+    const markerId = (hex, start) => 'arrow' + (start ? '-start' : '') + colorName(hex);
+    const HEAD = 'M 1.4,0 C 0.2,0.4 -1.6,1.2 -3.6,2.5 C -2.9,1.1 -2.9,-1.1 -3.6,-2.5 C -1.6,-1.2 0.2,-0.4 1.4,0 Z';
+    const mirror = d => d.replace(/(-?[\d.]+),/g, (_, x) => String(-x) + ',');
+    // Hatching, the other fill: thin lines at 45° in the shape's colour, see-through as well
+    const hatchId = hex => 'hatch' + colorName(hex);
+    const DEFS = COLORS.map(c =>
       `<marker id="${markerId(c.hex)}" orient="auto" markerUnits="strokeWidth" style="overflow:visible">` +
-      `<path d="M -4.2,-2.1 L 1.1,0 L -4.2,2.1 Z" style="fill:${c.hex};stroke:none"/></marker>` +
+      `<path d="${HEAD}" style="fill:${c.hex};stroke:none"/></marker>` +
       `<marker id="${markerId(c.hex, true)}" orient="auto" markerUnits="strokeWidth" style="overflow:visible">` +
-      `<path d="M 4.2,-2.1 L -1.1,0 L 4.2,2.1 Z" style="fill:${c.hex};stroke:none"/></marker>`).join('');
+      `<path d="${mirror(HEAD)}" style="fill:${c.hex};stroke:none"/></marker>` +
+      `<pattern id="${hatchId(c.hex)}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">` +
+      `<path d="M 0,4.5 H 9" style="fill:none;stroke:${c.hex};stroke-width:1.5;stroke-opacity:0.55"/></pattern>`).join('');
+    // ours, always at hand: a file's own copies of them are not kept twice
+    const OUR_DEFS = new Set(COLORS.flatMap(c => [markerId(c.hex), markerId(c.hex, true), hatchId(c.hex)]));
 
     // Inkscape's lock: a GeoGebra picture under the drawing stays where it is
     const SODIPODI = 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd';
@@ -400,14 +413,14 @@
     const $ = s => document.querySelector(s);
     const view = $('#view'), content = $('#content'), live = $('#live'), ui = $('#ui'), stage = $('#stage');
     const typingLayer = $('#typing'); // the label being typed: strokes drawn meanwhile leave it alone
-    view.querySelector('defs').insertAdjacentHTML('beforeend', MARKERS);
+    view.querySelector('defs').insertAdjacentHTML('beforeend', DEFS);
 
     // the way to the Mac: Electron's preload, or nothing yet (page opened on its own)
     const bridge = window.padBridge || { send() { }, on() { } };
     const send = msg => bridge.send(msg);
 
-    // arrow: 0 none, 1 at the end, 2 at both ends
-    const style = { thick: false, dashed: false, dotted: false, arrow: 0, fill: false, grid: false, color: '#000000' };
+    // arrow: 0 none, 1 at the end, 2 at both ends; fill: 0 none, 1 see-through colour, 2 hatched
+    const style = { thick: false, dashed: false, dotted: false, arrow: 0, fill: 0, grid: false, color: '#000000' };
     let tool = 'pen';                  // 'pen' | 'select' | 'erase' | 'text' | 'axes'
     let target = { key: null, kind: 'none', label: '' };
     let scrollY = 0;                   // page units at the top of the stage
@@ -515,11 +528,25 @@
     const width = () => style.thick ? 5 : 2.5;
     const dashFor = w => style.dashed ? `${4 * w},${3 * w}` : style.dotted ? `0.01,${2.6 * w}` : null;
 
+    // A closed shape's fill: 0 none, 1 its colour see-through (overlaps get
+    // darker), 2 hatched in its colour
+    function setFill(st, kind, c) {
+      st.delete('fill-opacity');
+      if (kind === 2) st.set('fill', `url(#${hatchId(c)})`);
+      else if (kind === 1) { st.set('fill', c); st.set('fill-opacity', String(FILL_ALPHA)); }
+      else st.set('fill', 'none');
+    }
+    const fillKind = st => /url\(#hatch/.test(st.get('fill') || '') ? 2 : isFilled(st) ? 1 : 0;
+    // an outline with something inside (a dot is all fill, a label is text)
+    const isFilled = st => (st.get('fill') || 'none') !== 'none' && (st.get('stroke') || 'none') !== 'none';
+
     function styleText({ closed = false, open = false, dot = false } = {}) {
       const w = width(), c = style.color;
       if (dot) return `fill:${c};stroke:none`;
+      const fill = new Map();
+      setFill(fill, open ? 0 : style.fill, c);
       const parts = [
-        `fill:${style.fill && !open ? GRAY : 'none'}`,
+        ...[...fill].map(([k, v]) => k + ':' + v),
         `stroke:${c}`, `stroke-width:${w}`, 'stroke-linecap:round', 'stroke-linejoin:round'
       ];
       const dash = dashFor(w);
@@ -723,17 +750,150 @@
       }
     }
 
-    // freehand: drop the jitter, then a smooth curve through what is left
-    function smoothPath(pts) {
-      const p = simplify(pts, 0.7);
-      if (p.length < 3) return 'M ' + r1(p[0].x) + ' ' + r1(p[0].y) + ' L ' + r1(p[p.length - 1].x) + ' ' + r1(p[p.length - 1].y);
-      let d = 'M ' + r1(p[0].x) + ' ' + r1(p[0].y);
-      for (let i = 0; i < p.length - 1; i++) {
-        const p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2;
-        d += ` C ${r1(p1.x + (p2.x - p0.x) / 6)} ${r1(p1.y + (p2.y - p0.y) / 6)} ` +
-          `${r1(p2.x - (p3.x - p1.x) / 6)} ${r1(p2.y - (p3.y - p1.y) / 6)} ${r1(p2.x)} ${r1(p2.y)}`;
+    /* Freehand, made neat: the Pencil's wobble evened out, the flick it leaves
+       as it lands or lifts cut off, corners kept sharp, and a loop closed
+       without a seam. Then a smooth curve through what is left. */
+    const STEP = 2; // the points, evenly spaced first, so all this works the same at any speed
+
+    function resample(pts) {
+      const out = [{ ...pts[0] }];
+      let need = STEP;
+      for (let i = 1; i < pts.length; i++) {
+        let a = pts[i - 1], d = dist(a, pts[i]);
+        while (d >= need) {
+          const b = pts[i], t = need / d;
+          a = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+          out.push(a);
+          d = dist(a, b); need = STEP;
+        }
+        need -= d;
       }
-      return d;
+      const last = pts[pts.length - 1];
+      if (dist(out[out.length - 1], last) > 0.3) out.push({ ...last }); else out[out.length - 1] = { ...last };
+      return out;
+    }
+
+    const turn = (a, b, c) => { // the angle between a→b and b→c
+      const ux = b.x - a.x, uy = b.y - a.y, vx = c.x - b.x, vy = c.y - b.y;
+      const n = Math.hypot(ux, uy) * Math.hypot(vx, vy);
+      return n ? Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / n))) : 0;
+    };
+
+    // A flick: a short tail bending sharply away from where the stroke was
+    // going — a tiny one (under 8 units), or anything before a corner in the
+    // first or last 12 units, zigzags included
+    function trimHooks(p, start) {
+      if (pathLength(p) < 40 || p.length < 14) return p;
+      for (let round = 0; round < 3 && p.length >= 14; round++) {
+        const cs = cornersOf(p, false), last = p.length - 1;
+        const head = start && cs.length && cs[0] <= 6 ? cs[0] : 0;
+        const tail = cs.length && cs[cs.length - 1] >= last - 6 ? cs[cs.length - 1] : last;
+        if (!head && tail === last) break;
+        p = p.slice(head, tail + 1);
+      }
+      if (p.length < 14) return p;
+      const hook = q => { // q: the stroke from the end being looked at inwards
+        for (let n = 4; n >= 2; n--) if (turn(q[n + 8], q[n], q[0]) > 1.3) return n;
+        return 0;
+      };
+      const end = hook(p.slice().reverse());
+      if (end) p = p.slice(0, p.length - end);
+      const begin = start ? hook(p) : 0;
+      return begin ? p.slice(begin) : p;
+    }
+
+    // corners: where the stroke turns sharply over a few points — the sharpest of a run
+    function cornersOf(p, loop) {
+      const n = p.length, R = 3, at = i => p[loop ? (i + n) % n : i];
+      const sharp = [];
+      for (let i = loop ? 0 : R; i < (loop ? n : n - R); i++) {
+        const a = turn(at(i - R), p[i], at(i + R));
+        if (a > 0.95) sharp.push({ i, a });
+      }
+      const out = [];
+      for (const c of sharp) {
+        const prev = out[out.length - 1];
+        if (prev && c.i - prev.i <= R) { if (c.a > prev.a) out[out.length - 1] = c; }
+        else out.push(c);
+      }
+      return out.map(c => c.i);
+    }
+
+    // each point moves toward its neighbours, never across a corner; the ends stay put
+    function relax(p, R) {
+      return p.map((q, i) => {
+        const r = Math.min(R, i, p.length - 1 - i);
+        if (!r) return q;
+        let x = 0, y = 0, w = 0;
+        for (let k = -r; k <= r; k++) { const f = r + 1 - Math.abs(k); x += p[i + k].x * f; y += p[i + k].y * f; w += f; }
+        return { x: x / w, y: y / w };
+      });
+    }
+
+    // ends near each other around a real area: a loop (an overshoot past the start is cut)
+    function loopOf(p) {
+      if (p.length < 12) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const q of p) { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y); }
+      if (maxX - minX < 12 || maxY - minY < 12) return null;
+      let cut = p.length - 1;
+      for (let i = Math.floor(p.length * 0.75); i < p.length; i++) if (dist(p[i], p[0]) < dist(p[cut], p[0])) cut = i;
+      return dist(p[cut], p[0]) < 14 ? p.slice(0, cut + 1) : null;
+    }
+
+    function freehand(raw, startSnapped) {
+      let p = trimHooks(resample(raw), !startSnapped);
+      // how far the smoothing reaches: up to ±10 units, less for small strokes —
+      // a letter written by hand keeps its shape
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const q of p) { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y); }
+      const size = Math.max(maxX - minX, maxY - minY), R = size < 50 ? 1 : size < 120 ? 3 : 5;
+      // with an arrow it stays open: a turning arrow keeps its head
+      const loop = style.arrow ? null : loopOf(p);
+      if (loop) p = loop;
+      else { const end = endSnap(p[p.length - 1]); if (end) p[p.length - 1] = end; } // ends on another end: joins it
+      const corners = cornersOf(p, !!loop);
+      if (!loop) return { d: curve(relaxPieces(p, corners, R), false), loop: false };
+      // a loop is smoothed all the way round: from a corner back to it…
+      if (corners.length) {
+        const c = corners[0];
+        p = p.slice(c).concat(p.slice(0, c), [p[c]]);
+        const out = relaxPieces(p, cornersOf(p, false), R);
+        out[0].corner = true; // (the same point as the last one)
+        return { d: curve(out, true), loop: true };
+      }
+      // …or, without one, three times round, keeping the middle
+      const n = p.length;
+      return { d: curve(relaxPieces(p.concat(p, p), [], R).slice(n, 2 * n), true), loop: true };
+    }
+
+    // smoothed piece by piece between corners, which stay exactly where they are
+    function relaxPieces(p, corners, R) {
+      const cuts = [0, ...corners, p.length - 1];
+      let out = [];
+      for (let k = 0; k + 1 < cuts.length; k++) {
+        const piece = relax(p.slice(cuts[k], cuts[k + 1] + 1), R);
+        piece[piece.length - 1].corner = k + 1 < cuts.length - 1;
+        out = out.concat(k ? piece.slice(1) : piece);
+      }
+      return out;
+    }
+
+    // a smooth curve through the points (Catmull–Rom), sharp at corners; a loop closes with Z
+    function curve(pts, closed) {
+      const pieces = [[]];
+      for (const q of pts) { pieces[pieces.length - 1].push(q); if (q.corner) pieces.push([q]); }
+      let p = pieces.flatMap((piece, k) => (k ? simplify(piece, 0.5).slice(1) : simplify(piece, 0.5)));
+      if (closed && p.length > 2 && dist(p[0], p[p.length - 1]) < 0.5) p = p.slice(0, -1);
+      if (p.length < 3 && !closed) return 'M ' + r1(p[0].x) + ' ' + r1(p[0].y) + ' L ' + r1(p[p.length - 1].x) + ' ' + r1(p[p.length - 1].y);
+      const n = p.length, at = i => closed ? p[(i + n) % n] : p[Math.max(0, Math.min(n - 1, i))];
+      const tangent = i => at(i).corner ? { x: 0, y: 0 } : { x: (at(i + 1).x - at(i - 1).x) / 6, y: (at(i + 1).y - at(i - 1).y) / 6 };
+      let d = 'M ' + r1(p[0].x) + ' ' + r1(p[0].y);
+      for (let i = 0; i < (closed ? n : n - 1); i++) {
+        const a = at(i), b = at(i + 1), ta = tangent(i), tb = tangent(i + 1);
+        d += ` C ${r1(a.x + ta.x)} ${r1(a.y + ta.y)} ${r1(b.x - tb.x)} ${r1(b.y - tb.y)} ${r1(b.x)} ${r1(b.y)}`;
+      }
+      return closed ? d + ' Z' : d;
     }
 
     /* ---------------------------------------------------------------- *
@@ -815,13 +975,13 @@
       root.setAttribute('height', h);
       root.setAttribute('viewBox', `0 ${y0} ${W} ${h}`);
       const defs = doc.createElementNS(SVGNS, 'defs');
-      // only the arrow heads in use, so the file stays small
-      const used = new Set([...content.querySelectorAll('[style*="marker"]')].flatMap(n =>
+      // only the arrow heads and hatchings in use, so the file stays small
+      const used = new Set([...content.querySelectorAll('[style*="url("]')].flatMap(n =>
         [...(n.getAttribute('style') || '').matchAll(/url\(#([\w-]+)\)/g)].map(m => m[1])));
       const tmp = document.createElementNS(SVGNS, 'defs');
-      tmp.innerHTML = MARKERS;
+      tmp.innerHTML = DEFS;
       for (const m of tmp.children) if (used.has(m.id)) defs.appendChild(doc.importNode(m, true));
-      for (const d of extraDefs) if (!/^arrow/.test(d.id || '')) defs.appendChild(doc.importNode(d, true));
+      for (const d of extraDefs) if (!OUR_DEFS.has(d.id)) defs.appendChild(doc.importNode(d, true));
       const g = doc.createElementNS(SVGNS, 'g');
       g.setAttribute('id', 'figure');
       for (const n of items()) { g.appendChild(doc.createTextNode('\n')); g.appendChild(doc.importNode(n, true)); }
@@ -849,7 +1009,7 @@
       const take = (node, transform) => {
         for (const child of [...node.children]) {
           if (SKIP.has(child.localName)) {
-            if (child.localName === 'defs') for (const d of child.children) if (!/^arrow/.test(d.id || '')) extraDefs.push(document.importNode(d, true));
+            if (child.localName === 'defs') for (const d of child.children) if (!OUR_DEFS.has(d.id)) extraDefs.push(document.importNode(d, true));
             continue;
           }
           const layer = child.localName === 'g' && (child.getAttribute('id') === 'figure' ||
@@ -866,6 +1026,13 @@
         }
       };
       take(root, wrap);
+      // the old opaque gray fill becomes the see-through one: the same gray, until fills overlap
+      for (const n of content.querySelectorAll('[style*="fill"]')) {
+        const st = readStyle(n);
+        if ((st.get('fill') || '').toLowerCase() !== GRAY || !isFilled(st) || st.has('fill-opacity')) continue;
+        setFill(st, 1, '#000000');
+        writeStyle(n, st);
+      }
       const defs = view.querySelector('defs');
       defs.querySelectorAll('.extra').forEach(n => n.remove());
       for (const d of extraDefs) { const c = d.cloneNode(true); c.classList.add('extra'); defs.appendChild(c); }
@@ -964,11 +1131,8 @@
         const c = snapPt(s.pts[0]);
         node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
       } else {
-        // a freehand stroke that ends on another end joins it
-        const end = endSnap(s.pts[s.pts.length - 1]);
-        if (end) s.pts[s.pts.length - 1] = end;
-        const closedish = s.pts.length > 4 && dist(s.pts[0], s.pts[s.pts.length - 1]) < 14;
-        node = el('path', { d: smoothPath(s.pts), style: styleText({ closed: closedish && style.fill }) });
+        const f = freehand(s.pts, !!s.pts[0].snapped);
+        node = el('path', { d: f.d, style: styleText(f.loop ? { closed: true } : { open: true }) });
       }
       add(node);
       commit();
@@ -977,8 +1141,8 @@
     // filled shapes go underneath the lines, so a fill never hides one
     // …but above a locked picture, which stays at the very bottom
     function add(node) {
-      const filled = (readStyle(node).get('fill') || '').toLowerCase() === GRAY;
-      if (filled) content.insertBefore(node, items().find(n => !isLocked(n)) || null); else content.appendChild(node);
+      if (isFilled(readStyle(node))) content.insertBefore(node, items().find(n => !isLocked(n)) || null);
+      else content.appendChild(node);
     }
 
     /* ---------------------------------------------------------------- *
@@ -1176,7 +1340,13 @@
       const st = readStyle(n);
       const isText = n.localName === 'text';
       const isDot = n.localName === 'circle' && st.get('stroke') === 'none';
-      const closed = ['rect', 'circle', 'ellipse', 'polygon'].includes(n.localName) || /z\s*$/i.test(n.getAttribute('d') || '');
+      // closed: a shape, a path ending in Z, or one whose ends meet (freehand loops of older figures)
+      const meets = () => {
+        try { const l = n.getTotalLength(); return l > 30 && dist(n.getPointAtLength(0), n.getPointAtLength(l)) < 14; }
+        catch { return false; }
+      };
+      const closed = ['rect', 'circle', 'ellipse', 'polygon'].includes(n.localName) || /z\s*$/i.test(n.getAttribute('d') || '') ||
+        (n.localName === 'path' && meets());
       const w = parseFloat(st.get('stroke-width')) || 2.5;
       const arrows = () => {
         const c = st.get('stroke') || style.color;
@@ -1188,6 +1358,7 @@
         case 'color':
           if (isText || isDot) { st.set('fill', style.color); break; }
           st.set('stroke', style.color);
+          if (isFilled(st)) setFill(st, fillKind(st), style.color); // the fill is the shape's colour too
           for (const k of ['marker-end', 'marker-start'])
             if (st.has(k)) st.set(k, `url(#${markerId(style.color, k === 'marker-start')})`);
           break;
@@ -1207,7 +1378,7 @@
           break;
         }
         case 'arrow': if (!isText && !isDot && !closed) arrows(); break;
-        case 'fill': if (!isText && !isDot) st.set('fill', style.fill ? GRAY : 'none'); break;
+        case 'fill': if (!isText && !isDot && closed) setFill(st, style.fill, st.get('stroke') || style.color); break;
       }
       writeStyle(n, st);
       if (key === 'fill' && style.fill && n.parentNode === content) content.insertBefore(n, items().find(c => !isLocked(c) && c !== n) || null);
@@ -1361,6 +1532,7 @@
       b.onclick = () => {
         const k = b.dataset.style;
         if (k === 'arrow') style.arrow = (style.arrow + 1) % 3;
+        else if (k === 'fill') style.fill = (style.fill + 1) % 3;
         else style[k] = !style[k];
         if (k === 'dashed' && style.dashed) style.dotted = false;
         if (k === 'dotted' && style.dotted) style.dashed = false;
@@ -1383,6 +1555,14 @@
       '<path d="M3 9 H25 M19 4 L26 9 L19 14" fill="none" stroke="#1d2027" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
       '<path d="M5 9 H25 M19 4 L26 9 L19 14 M11 4 L4 9 L11 14" fill="none" stroke="#1d2027" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
     ];
+    // two see-through discs, darker where they overlap; a hatched one
+    const FILL_ICONS = [
+      '<g class="fillable" fill="#1d2027" fill-opacity=".22"><circle cx="11" cy="9" r="7"/><circle cx="19" cy="9" r="7"/></g>' +
+      '<g fill="none" stroke="#1d2027" stroke-width="1.6"><circle cx="11" cy="9" r="7"/><circle cx="19" cy="9" r="7"/></g>',
+      '<defs><clipPath id="icon-hatch"><circle cx="15" cy="9" r="7.5"/></clipPath></defs>' +
+      '<path clip-path="url(#icon-hatch)" d="M3 13 L13 -1 M7 17 L17 1 M12 19 L22 3 M17 19 L27 5" fill="none" stroke="#1d2027" stroke-width="1.2"/>' +
+      '<circle cx="15" cy="9" r="7.5" fill="none" stroke="#1d2027" stroke-width="1.8"/>'
+    ];
     function paintBar() {
       for (const b of document.querySelectorAll('[data-style]')) b.classList.toggle('on', !!style[b.dataset.style]);
       for (const b of document.querySelectorAll('[data-tool]')) b.classList.toggle('on', tool === b.dataset.tool);
@@ -1390,6 +1570,9 @@
       const arrow = $('[data-style=arrow]');
       arrow.querySelector('svg').innerHTML = ARROW_ICONS[style.arrow];
       arrow.querySelector('span').textContent = style.arrow === 2 ? 'Both' : 'Arrow';
+      const fill = $('[data-style=fill]');
+      fill.querySelector('svg').innerHTML = FILL_ICONS[style.fill === 2 ? 1 : 0];
+      fill.querySelector('span').textContent = style.fill === 2 ? 'Hatch' : 'Fill';
     }
 
     $('#copyprev').onclick = () => send({ type: 'copy-previous' });

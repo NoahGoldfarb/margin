@@ -217,13 +217,22 @@ On the pad:
 - **Hold the Pencil still** at the end of a stroke and it becomes a straight
   line (snapped to 0°/45°/90° when close), circle, ellipse, rectangle,
   triangle or a few joined straight pieces. A tap is a point.
+- **Freehand strokes come out neat**: the Pencil's wobble is evened out, the
+  little flick it leaves as it lands or lifts is cut off, corners stay sharp,
+  and a loop closes without a seam. Small strokes, like a letter written by
+  hand, keep their shape.
 - **Lines join up by themselves**: a stroke that starts or ends near another
   end, a corner or a point lands exactly on it (a small ring shows it), so
   triangles close and lines meet. **Grid** also puts shapes on the dot grid.
 - **Thick, Dashed, Dotted, Arrow, Fill** — Castel's style table, cut down to
-  the buttons that matter; **Arrow** goes none → at the end → at both ends.
-  Four colours: black, blue, red, green. Gray fills always go underneath the
-  lines.
+  the buttons that matter; **Arrow** goes none → at the end → at both ends,
+  with LaTeX's curved arrow heads. Four colours: black, blue, red, green.
+- **Fill** goes none → **Fill** → **Hatch**. A fill is the shape's own colour,
+  see-through, so where filled shapes overlap the overlap comes out darker
+  (and two colours mix); **Hatch** shades the shape with thin diagonal lines
+  in its colour. Fills always go underneath the lines; a fill changes colour
+  with its shape. The gray fills of older figures turn into the see-through
+  kind and look the same until they overlap.
 - **Select** — tap a stroke, or draw a loop around several. Drag them
   anywhere; **Duplicate** or **Delete** them; and any style button or colour
   now changes them, so you can draw first and style afterwards.
