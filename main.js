@@ -611,6 +611,11 @@ function openPad(display = padDisplay()) {
   });
   padWin.padDisplayId = display ? display.id : null;
   padWin.loadFile(path.join(__dirname, 'pad.html'));
+  // Sidecar hands a two-finger pinch over as a trackpad pinch. With Electron's
+  // default limits (1–1) the page is always "fully zoomed out", so Chromium
+  // swallows a pinch until it has grown by half; with room to zoom it passes
+  // it straight on as ctrl+wheel, which the pad takes and cancels itself
+  padWin.webContents.on('did-finish-load', () => padWin && padWin.webContents.setVisualZoomLevelLimits(1, 8));
   padWin.once('ready-to-show', () => padWin && padWin.showInactive());
   padWin.on('closed', () => { padWin = null; sendToOwner('pad-state', { open: false }); });
   sendToOwner('pad-state', { open: true });
