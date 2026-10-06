@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 const { pathToFileURL, fileURLToPath } = require('url');
 
@@ -377,14 +378,43 @@ ipcMain.handle('tex-compile', async (_e, p) => {
 
 const templatesDir = () => path.join(app.getPath('userData'), 'templates');
 
-// first use: start the user's folder with the templates that ship with Margin
+// The templates that ship with Margin, kept up to date in the user's folder:
+// a new one is added, and one the user never changed follows the shipped
+// version. Edited or deleted ones are left alone — .shipped.json remembers
+// what was copied, to tell the two apart.
+const sha = text => crypto.createHash('sha256').update(text).digest('hex');
+// what Margin shipped before .shipped.json existed
+const SHIPPED_BEFORE = {
+  'castel.tex': '32b17ca7d3e7b424d661ff479262f13630956e791ca82203a5e362bd9ee50687',
+  'default.tex': '662724ad1dd5af26debd4c628ae758698194ec635f53d5bac7197b5ddef93589'
+};
+
+async function syncTemplates(dir) {
+  const existed = await fs.access(dir).then(() => true, () => false);
+  await fs.mkdir(dir, { recursive: true });
+  const record = path.join(dir, '.shipped.json');
+  let shipped = await fs.readFile(record, 'utf8').then(JSON.parse, () => null);
+  if (!shipped || typeof shipped !== 'object') shipped = existed ? { ...SHIPPED_BEFORE } : {};
+  const bundled = path.join(__dirname, 'templates');
+  for (const name of await fs.readdir(bundled).catch(() => [])) {
+    if (!name.endsWith('.tex')) continue;
+    const text = await fs.readFile(path.join(bundled, name), 'utf8');
+    const target = path.join(dir, name);
+    const mine = await fs.readFile(target, 'utf8').catch(() => null);
+    const update = mine === null ? !(name in shipped) : mine !== text && sha(mine) === shipped[name];
+    if (update) await fs.writeFile(target, text);
+    if (update || mine === text) shipped[name] = sha(text);
+  }
+  await fs.writeFile(record, JSON.stringify(shipped, null, 2) + '\n');
+}
+
+let templatesSynced = null;
 async function ensureTemplates() {
   const dir = templatesDir();
-  try { await fs.access(dir); return dir; } catch { }
-  await fs.mkdir(dir, { recursive: true });
-  const bundled = path.join(__dirname, 'templates');
-  for (const name of await fs.readdir(bundled).catch(() => []))
-    await fs.copyFile(path.join(bundled, name), path.join(dir, name));
+  // once per run — again if the folder was removed meanwhile
+  if (!templatesSynced || !(await fs.access(dir).then(() => true, () => false)))
+    templatesSynced = syncTemplates(dir).catch(err => { templatesSynced = null; console.error('templates:', err); });
+  await templatesSynced;
   return dir;
 }
 

@@ -1,6 +1,7 @@
 % Lecture notes the way Gilles Castel set them up (castel.dev/post/lecture-notes-3):
-% boxed definitions and theorems, \lecture{n}{date}{title} with the date in
-% the margin and the lecture title in the running header.
+% boxed definitions and theorems, numbered right through the notes; chapters
+% for the topics, \lecture{n}{date}{title} with the date in the margin; the
+% lecture in the running header, the chapter and page number at the foot.
 \documentclass[a4paper]{report}
 
 \usepackage[utf8]{inputenc}
@@ -68,11 +69,10 @@
 }
 \usepackage{fancyhdr}
 \pagestyle{fancy}
-\fancyhead[RO,LE]{\@lecture}
-\fancyhead[RE,LO]{}
-\fancyfoot[RO,LE]{\thepage}
-\fancyfoot[RE,LO]{}
+\fancyhf{}
+\fancyhead[L]{\@lecture}
 \fancyfoot[C]{\leftmark}
+\fancyfoot[R]{\thepage}
 \makeatother
 
 % figures (pdf + pdf_tex from Inkscape)
@@ -91,8 +91,9 @@
 \begin{document}
 \maketitle
 
-\lecture{1}{{{date}}}{$1}
+\chapter{$1}
+\lecture{1}{{{date}}}{$2}
 
-$2
+$3
 
 \end{document}

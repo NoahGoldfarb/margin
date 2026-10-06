@@ -57,7 +57,7 @@ in that mode notes are kept in the browser's local storage instead of a file.
 | `Cmd+Alt+←/→` | Move between the two halves |
 | `Tab` | Expand a snippet, jump to the next `$0` slot, or step out of `}` |
 | `tbl` + `Tab` | Insert a table; `Tab` / `Shift+Tab` move between cells, `Enter` adds a row |
-| `!` + `Tab` | In a `.tex` file: insert a whole document from a template (`!castel` for another one) |
+| `!` + `Tab` | In a `.tex` file: insert a whole document from a template — Castel's lecture notes (`!plain` for a bare article) |
 | `ggb` + `Tab` | Open GeoGebra for a graph; `Cmd+Enter` (`Ctrl+Enter`), then drag over it to insert that area as a picture |
 | iPad button | Open the drawing pad (on the iPad with Sidecar); the Pencil draws into a figure at the caret |
 | `geo` + `Tab` | The same for geometry: a blank sheet without a coordinate system |
@@ -85,11 +85,16 @@ keeps one number, level with its first row); the caret's line stands out and
 lines with errors turn red.
 
 - In an empty file, `!` + Tab inserts a whole document, like `!` for HTML in
-  VS Code. `!castel` + Tab uses Castel's lecture-notes setup instead (boxed
-  theorems, `\lecture{n}{date}{title}`, `\incfig`). Templates are plain `.tex`
-  files — **LaTeX › Open templates folder** to change them or add your own;
-  `!name` + Tab picks `name.tex`. In a template, `$0`, `$1`, … are Tab stops,
-  `{{date}}` and `{{file}}` are filled in.
+  VS Code: lecture notes the way Gilles Castel set them up — boxed definitions
+  and theorems numbered through the notes, a chapter per topic,
+  `\lecture{n}{date}{title}` with the date in the margin, the lecture at the top
+  of each page and the chapter and page number at the foot, `\incfig` for
+  figures. Tab steps through title, chapter, lecture title and the text.
+  `!plain` + Tab gives a bare article instead (`!castel` still works too).
+  Templates are plain `.tex` files — **LaTeX › Open templates folder** to change
+  them or add your own; `!name` + Tab picks `name.tex`. In a template, `$0`,
+  `$1`, … are Tab stops, `{{date}}` and `{{file}}` are filled in. A template
+  you never changed follows Margin's updates; one you edited stays yours.
 - The LaTeX snippets work as in notes, and know LaTeX's math: inside
   `align`, `equation` and friends counts as math, `%` comments do not.
 - A file without `\documentclass` (say `lec_03.tex`) compiles the `.tex` next
