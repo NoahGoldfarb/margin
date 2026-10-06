@@ -196,7 +196,7 @@
       position: fixed;
       left: 12px;
       bottom: 12px;
-      max-width: calc(100% - 24px);
+      max-width: calc(100% - 190px);
       padding: 6px 12px;
       border-radius: 16px;
       background: rgba(245, 245, 243, .92);
@@ -208,6 +208,43 @@
       text-overflow: ellipsis;
       pointer-events: none;
       z-index: 2;
+    }
+
+    /* zoom, for the Pencil too: − 100% + — the percentage goes back to the whole width */
+    #zoom {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      align-items: center;
+      border-radius: 16px;
+      background: rgba(245, 245, 243, .92);
+      border: 1px solid var(--line);
+      z-index: 2;
+    }
+
+    #zoom button {
+      height: 32px;
+      min-width: 36px;
+      padding: 0 8px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    #zoom #zoom-level {
+      min-width: 56px;
+      font-size: 13px;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums
+    }
+
+    #zoom.zoomed #zoom-level {
+      color: var(--accent);
+      font-weight: 600
     }
 
     #status b {
@@ -360,6 +397,11 @@
   </div>
   <div id="labels"></div>
   <div id="status">Starting…</div>
+  <div id="zoom">
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="zoom-level" title="Back to the whole width">100%</button>
+    <button id="zoom-in" title="Zoom in — or pinch with two fingers">+</button>
+  </div>
   <div id="selmenu" class="hidden">
     <button id="sel-dup">Duplicate</button>
     <button id="sel-del">Delete</button>
@@ -424,20 +466,41 @@
     let tool = 'pen';                  // 'pen' | 'select' | 'erase' | 'text' | 'axes'
     let target = { key: null, kind: 'none', label: '' };
     let scrollY = 0;                   // page units at the top of the stage
+    let scrollX = 0;                   // …and at its left, once zoomed in
+    let zoom = 1;                      // 1: the page's full width across the stage
+    const MAX_ZOOM = 8;
     let extraDefs = [];                // <defs> children a loaded file brought along (Inkscape's)
     const histories = new Map();       // figure key -> { undo: [snapshots], redo: [] }
     let selection = [];                // selected items (Select tool)
 
     /* ---------------------------------------------------------------- *
-     *  view: 1000 units across the stage, scrolled with two fingers
+     *  view: 1000 units across the stage, or fewer zoomed in — two
+     *  fingers move it, pinching zooms; never while the Pencil is down
      * ---------------------------------------------------------------- */
-    const scale = () => stage.clientWidth / W;
+    const scale = () => stage.clientWidth / W * zoom;
     function layout() {
       const h = stage.clientHeight / scale();
-      view.setAttribute('viewBox', `0 ${scrollY} ${W} ${h}`);
+      view.setAttribute('viewBox', `${scrollX} ${scrollY} ${W / zoom} ${h}`);
+      $('#zoom-level').textContent = Math.round(zoom * 100) + '%';
+      $('#dots circle').setAttribute('r', 1.1 / zoom); // grid dots stay small however close you are
+      $('#zoom').classList.toggle('zoomed', zoom > 1);
       paintSelection();
       paintLabels();
     }
+    function clampView() {
+      scrollX = Math.max(0, Math.min(W - W / zoom, scrollX));
+      scrollY = Math.max(-3000, Math.min(30000, scrollY));
+    }
+    function panBy(dx, dy) { scrollX += dx; scrollY += dy; clampView(); layout(); }
+    // zoom by f, the spot under (cx, cy) staying where it is
+    function zoomAt(cx, cy, f) {
+      const p = clientToPage(cx, cy), r = stage.getBoundingClientRect();
+      zoom = Math.max(1, Math.min(MAX_ZOOM, zoom * f));
+      scrollX = p.x - (cx - r.left) / scale();
+      scrollY = p.y - (cy - r.top) / scale();
+      clampView(); layout();
+    }
+    const busy = () => !!(stroke || erasing || picking || axes || dragging); // the Pencil is at work
 
     // Labels with $…$ typeset by KaTeX, laid over the drawing where the text
     // sits — the one being typed too, so it looks while typing as it will
@@ -489,19 +552,43 @@
     // KaTeX's fonts arrive on first use: the caret moves to where the label really ends
     document.fonts.addEventListener('loadingdone', () => paintLabels());
     window.addEventListener('resize', layout);
+    // two fingers on Sidecar arrive as a trackpad: scrolling pans, a pinch is a wheel with ctrlKey
     stage.addEventListener('wheel', e => {
       e.preventDefault();
-      scrollY = Math.max(-3000, Math.min(30000, scrollY + e.deltaY / scale()));
-      layout();
+      if (busy()) return;
+      if (e.ctrlKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+      else panBy(e.deltaX / scale(), e.deltaY / scale());
     }, { passive: false });
+
+    // fingers on a touch screen: one drags the page, two pinch and drag it
+    const fingers = new Map();
+    stage.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch') return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { stage.setPointerCapture(e.pointerId); } catch { }
+    });
+    stage.addEventListener('pointermove', e => {
+      const f = fingers.get(e.pointerId);
+      if (!f) return;
+      const two = () => [...fingers.values()].slice(0, 2);
+      const before = two().map(q => ({ ...q }));
+      f.x = e.clientX; f.y = e.clientY;
+      const after = two();
+      if (busy() || !before.some((q, i) => q.x !== after[i].x || q.y !== after[i].y)) return;
+      const mid = q => q.length > 1 ? { x: (q[0].x + q[1].x) / 2, y: (q[0].y + q[1].y) / 2 } : q[0];
+      const m0 = mid(before), m1 = mid(after);
+      if (after.length > 1) zoomAt(m0.x, m0.y, dist(after[0], after[1]) / Math.max(1, dist(before[0], before[1])));
+      panBy((m0.x - m1.x) / scale(), (m0.y - m1.y) / scale());
+    });
+    for (const type of ['pointerup', 'pointercancel']) stage.addEventListener(type, e => fingers.delete(e.pointerId));
 
     const clientToPage = (cx, cy) => {
       const r = stage.getBoundingClientRect();
-      return { x: (cx - r.left) / scale(), y: (cy - r.top) / scale() + scrollY };
+      return { x: (cx - r.left) / scale() + scrollX, y: (cy - r.top) / scale() + scrollY };
     };
     const pageToClient = p => {
       const r = stage.getBoundingClientRect();
-      return { x: r.left + p.x * scale(), y: r.top + (p.y - scrollY) * scale() };
+      return { x: r.left + (p.x - scrollX) * scale(), y: r.top + (p.y - scrollY) * scale() };
     };
     const toPage = e => clientToPage(e.clientX, e.clientY);
     const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -618,7 +705,7 @@
     }
 
     function endSnap(p) {
-      let best = null, d = SNAP;
+      let best = null, d = SNAP / zoom; // as far on screen at any zoom
       for (const q of snapCache) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
       return best ? { x: best.x, y: best.y, snapped: true } : null;
     }
@@ -628,7 +715,7 @@
 
     function showSnapMarks(points) {
       ui.querySelectorAll('.snap-mark').forEach(n => n.remove());
-      for (const p of points) if (p && p.snapped) ui.appendChild(el('circle', { class: 'snap-mark', cx: p.x, cy: p.y, r: 7 }));
+      for (const p of points) if (p && p.snapped) ui.appendChild(el('circle', { class: 'snap-mark', cx: p.x, cy: p.y, r: 7 / zoom }));
     }
 
     /* ---------------------------------------------------------------- *
@@ -676,8 +763,9 @@
     }
 
     function recognize(pts) {
+      const u = 1 / zoom; // sizes as they look on screen, at any zoom
       const len = pathLength(pts);
-      if (len < 20) return null;
+      if (len < 20 * u) return null;
       const a = pts[0], b = pts[pts.length - 1], chord = dist(a, b);
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of pts) {
@@ -689,13 +777,13 @@
       // a line: nothing strays far from the chord
       let dev = 0;
       for (const p of pts) dev = Math.max(dev, segDist(p, a, b));
-      if (chord > 15 && dev < Math.max(5, chord * 0.07)) {
+      if (chord > 15 * u && dev < Math.max(5 * u, chord * 0.07)) {
         const a2 = snapPt(a);
         return { type: 'line', a: a2, b: lineEnd(a2, b) };
       }
 
-      const closed = chord < Math.max(18, 0.28 * Math.max(w, h)) && len > 1.8 * Math.max(w, h);
-      if (closed && w > 12 && h > 12) {
+      const closed = chord < Math.max(18 * u, 0.28 * Math.max(w, h)) && len > 1.8 * Math.max(w, h);
+      if (closed && w > 12 * u && h > 12 * u) {
         const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, rx = w / 2, ry = h / 2;
         let eErr = 0, rErr = 0;
         for (const p of pts) {
@@ -722,7 +810,7 @@
       }
 
       // an open zig-zag of a few straight pieces: axes, angles, a "V"
-      const corners = simplify(pts, Math.max(4, 0.05 * diag));
+      const corners = simplify(pts, Math.max(4 * u, 0.05 * diag));
       if (corners.length >= 3 && corners.length <= 4) {
         let fit = 0;
         for (const p of pts) {
@@ -730,7 +818,7 @@
           for (let i = 1; i < corners.length; i++) best = Math.min(best, segDist(p, corners[i - 1], corners[i]));
           fit = Math.max(fit, best);
         }
-        if (fit < Math.max(5, 0.05 * diag)) return { type: 'polyline', pts: corners.map(snapPt) };
+        if (fit < Math.max(5 * u, 0.05 * diag)) return { type: 'polyline', pts: corners.map(snapPt) };
       }
       return null;
     }
@@ -842,7 +930,9 @@
     }
 
     function freehand(raw, startSnapped) {
-      let p = trimHooks(resample(raw), !startSnapped);
+      // all of it measured as it looks on screen: zoomed in, finer detail survives
+      const k = zoom;
+      let p = trimHooks(resample(raw.map(q => ({ x: q.x * k, y: q.y * k }))), !startSnapped);
       // how far the smoothing reaches: up to ±10 units, less for small strokes —
       // a letter written by hand keeps its shape
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -851,20 +941,23 @@
       // with an arrow it stays open: a turning arrow keeps its head
       const loop = style.arrow ? null : loopOf(p);
       if (loop) p = loop;
-      else { const end = endSnap(p[p.length - 1]); if (end) p[p.length - 1] = end; } // ends on another end: joins it
+      else { // ends on another end: joins it
+        const last = p[p.length - 1], end = endSnap({ x: last.x / k, y: last.y / k });
+        if (end) p[p.length - 1] = { x: end.x * k, y: end.y * k };
+      }
       const corners = cornersOf(p, !!loop);
-      if (!loop) return { d: curve(relaxPieces(p, corners, R), false), loop: false };
+      if (!loop) return { d: curve(relaxPieces(p, corners, R), false, k), loop: false };
       // a loop is smoothed all the way round: from a corner back to it…
       if (corners.length) {
         const c = corners[0];
         p = p.slice(c).concat(p.slice(0, c), [p[c]]);
         const out = relaxPieces(p, cornersOf(p, false), R);
         out[0].corner = true; // (the same point as the last one)
-        return { d: curve(out, true), loop: true };
+        return { d: curve(out, true, k), loop: true };
       }
       // …or, without one, three times round, keeping the middle
       const n = p.length;
-      return { d: curve(relaxPieces(p.concat(p, p), [], R).slice(n, 2 * n), true), loop: true };
+      return { d: curve(relaxPieces(p.concat(p, p), [], R).slice(n, 2 * n), true, k), loop: true };
     }
 
     // smoothed piece by piece between corners, which stay exactly where they are
@@ -879,12 +972,14 @@
       return out;
     }
 
-    // a smooth curve through the points (Catmull–Rom), sharp at corners; a loop closes with Z
-    function curve(pts, closed) {
+    // a smooth curve through the points (Catmull–Rom), sharp at corners; a loop closes with Z.
+    // The points are k times the page's units (the zoom), written back at the page's.
+    function curve(pts, closed, k) {
       const pieces = [[]];
       for (const q of pts) { pieces[pieces.length - 1].push(q); if (q.corner) pieces.push([q]); }
       let p = pieces.flatMap((piece, k) => (k ? simplify(piece, 0.5).slice(1) : simplify(piece, 0.5)));
       if (closed && p.length > 2 && dist(p[0], p[p.length - 1]) < 0.5) p = p.slice(0, -1);
+      p = p.map(q => ({ x: q.x / k, y: q.y / k, corner: q.corner }));
       if (p.length < 3 && !closed) return 'M ' + r1(p[0].x) + ' ' + r1(p[0].y) + ' L ' + r1(p[p.length - 1].x) + ' ' + r1(p[p.length - 1].y);
       const n = p.length, at = i => closed ? p[(i + n) % n] : p[Math.max(0, Math.min(n - 1, i))];
       const tangent = i => at(i).corner ? { x: 0, y: 0 } : { x: (at(i + 1).x - at(i - 1).x) / 6, y: (at(i + 1).y - at(i - 1).y) / 6 };
@@ -1087,9 +1182,9 @@
           }
           continue;
         }
-        if (dist(p, stroke.pts[stroke.pts.length - 1]) < 0.6) continue;
+        if (dist(p, stroke.pts[stroke.pts.length - 1]) < 0.6 / zoom) continue;
         stroke.pts.push(p);
-        if (dist(p, stroke.anchor) > 3.5) { stroke.anchor = p; armHold(); }
+        if (dist(p, stroke.anchor) > 3.5 / zoom) { stroke.anchor = p; armHold(); }
       }
       if (!stroke.snapped) paintLive();
     });
@@ -1126,7 +1221,7 @@
       if (!s) return;
       let node;
       if (s.snapped) node = shapeElement(s.snapped);
-      else if (pathLength(s.pts) < 3) {
+      else if (pathLength(s.pts) < 3 / zoom) {
         // a tap is a point, the kind every geometry figure has
         const c = snapPt(s.pts[0]);
         node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
@@ -1154,11 +1249,11 @@
       const parts = [], tail = 18, color = style.color;
       const st = `fill:none;stroke:${color};stroke-width:${width()};stroke-linecap:round;stroke-linejoin:round;marker-end:url(#${markerId(color)})`;
       const label = (x, y) => el('text', { x: r1(x), y: r1(y), style: `font-size:${TEXT_SIZE}px;font-family:serif;fill:${color}` });
-      if (Math.abs(dx) >= 30) {
+      if (Math.abs(dx) >= 30 / zoom) {
         parts.push(el('path', { d: `M ${r1(o.x - tail * sx)} ${r1(o.y)} L ${r1(c.x)} ${r1(o.y)}`, style: st }));
         const t = label(sx > 0 ? c.x + 10 : c.x - 28, o.y + TEXT_SIZE * 0.35); t.textContent = '$x$'; parts.push(t);
       }
-      if (Math.abs(dy) >= 30) {
+      if (Math.abs(dy) >= 30 / zoom) {
         parts.push(el('path', { d: `M ${r1(o.x)} ${r1(o.y - tail * sy)} L ${r1(o.x)} ${r1(c.y)}`, style: st }));
         const t = label(o.x + 12, c.y + TEXT_SIZE * 0.35); t.textContent = '$y$'; parts.push(t);
       }
@@ -1225,7 +1320,8 @@
         const b = pageBox(n);
         x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
       }
-      return { x: x0 - 8, y: y0 - 8, w: x1 - x0 + 16, h: y1 - y0 + 16 };
+      const m = 8 / zoom; // a margin that looks the same at any zoom
+      return { x: x0 - m, y: y0 - m, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m };
     }
 
     function select(list) {
@@ -1239,7 +1335,7 @@
       const box = selectionBox();
       menu.classList.toggle('hidden', !box || !!picking);
       if (!box) return;
-      ui.appendChild(el('rect', { class: 'sel-box', x: box.x, y: box.y, width: box.w, height: box.h, rx: 6 }));
+      ui.appendChild(el('rect', { class: 'sel-box', x: box.x, y: box.y, width: box.w, height: box.h, rx: 6 / zoom }));
       if (picking) return;
       const top = pageToClient({ x: box.x + box.w / 2, y: box.y });
       const bottom = pageToClient({ x: box.x + box.w / 2, y: box.y + box.h });
@@ -1280,7 +1376,7 @@
       picking = null;
       if (done.mode === 'move') { if (done.moved) commit(); paintSelection(); return; }
       done.path.remove();
-      if (pathLength(done.pts) < 12) { select([]); return; }
+      if (pathLength(done.pts) < 12 / zoom) { select([]); return; }
       // everything whose middle lies inside the loop
       const inside = (p, poly) => {
         let c = false;
@@ -1499,14 +1595,17 @@
       if (!isTyping(d.node)) askText(d.last); // a tap on a placed label with Text: edit it
     }
 
-    stage.addEventListener('pointerup', () => {
+    // a finger (a palm) going up or away is none of the Pencil's business
+    stage.addEventListener('pointerup', e => {
+      if (e.pointerType === 'touch') return;
       if (dragging) endDrag();
       else if (erasing) endErase();
       else if (picking) endPick();
       else if (axes) endAxes();
       else endStroke();
     });
-    stage.addEventListener('pointercancel', () => {
+    stage.addEventListener('pointercancel', e => {
+      if (e.pointerType === 'touch') return;
       clearTimeout(hold);
       if (dragging) { const d = dragging; dragging = null; if (d.moved && !isTyping(d.node)) commit(); }
       if (erasing) endErase();
@@ -1575,6 +1674,12 @@
       fill.querySelector('span').textContent = style.fill === 2 ? 'Hatch' : 'Fill';
     }
 
+    // the buttons zoom around the middle of the stage; the percentage goes back to the whole width
+    const zoomMiddle = f => { const r = stage.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, f); };
+    $('#zoom-in').onclick = () => zoomMiddle(1.5);
+    $('#zoom-out').onclick = () => zoomMiddle(1 / 1.5);
+    $('#zoom-level').onclick = () => zoomMiddle(1 / zoom);
+
     $('#copyprev').onclick = () => send({ type: 'copy-previous' });
     $('#newfig').onclick = () => send({ type: 'new-figure' });
 
@@ -1616,7 +1721,8 @@
             if (!same && h.undo.length && serializeItems(h.last) !== serializeItems(snapshot())) histories.delete(msg.key);
             history();
             // land on the drawing, a little below the bar
-            if (content.children.length) scrollY = content.getBBox().y - 60;
+            if (!same) { zoom = 1; scrollX = 0; } // another figure: the whole width again
+            if (content.children.length) scrollY = content.getBBox().y - 60 / zoom;
             else if (!same) scrollY = 0;
             layout();
           } else target = Object.assign(target, msg);

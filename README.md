@@ -217,6 +217,12 @@ On the pad:
 - **Hold the Pencil still** at the end of a stroke and it becomes a straight
   line (snapped to 0°/45°/90° when close), circle, ellipse, rectangle,
   triangle or a few joined straight pieces. A tap is a point.
+- **Zoom in for the fine work**: pinch with two fingers (up to 8×), move
+  around with two fingers; or **− / % / +** in the bottom-right corner, where
+  tapping the percentage goes back to the whole width. Joining up, shape
+  snapping and the tidying of strokes go by how things look on screen, so
+  detail drawn zoomed in stays as fine as you drew it. While the Pencil is
+  down the page never moves, so a resting palm cannot drag it away.
 - **Freehand strokes come out neat**: the Pencil's wobble is evened out, the
   little flick it leaves as it lands or lifts is cut off, corners stay sharp,
   and a loop closes without a seam. Small strokes, like a letter written by
