@@ -191,6 +191,15 @@
       height: 100%
     }
 
+    #ink {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      will-change: transform
+    }
+
     /* what the pad draws into, out of the way at the bottom */
     #status {
       position: fixed;
@@ -410,9 +419,12 @@
       </defs>
       <rect id="grid" x="0" y="-100000" width="1000" height="200000" fill="url(#dots)" />
       <g id="content"></g>
-      <g id="live"></g>
       <g id="typing"></g>
       <g id="ui"></g>
+    </svg>
+    <!-- the stroke being drawn, on a layer of its own: drawing it repaints nothing underneath -->
+    <svg id="ink" xmlns="http://www.w3.org/2000/svg">
+      <g id="live"></g>
     </svg>
   </div>
   <div id="labels"></div>
@@ -473,7 +485,7 @@
     const isLocked = n => n.getAttributeNS(SODIPODI, 'insensitive') === 'true';
 
     const $ = s => document.querySelector(s);
-    const view = $('#view'), content = $('#content'), live = $('#live'), ui = $('#ui'), stage = $('#stage');
+    const view = $('#view'), ink = $('#ink'), content = $('#content'), live = $('#live'), ui = $('#ui'), stage = $('#stage');
     const typingLayer = $('#typing'); // the label being typed: strokes drawn meanwhile leave it alone
     view.querySelector('defs').insertAdjacentHTML('beforeend', DEFS);
 
@@ -501,6 +513,7 @@
     function layout() {
       const h = stage.clientHeight / scale();
       view.setAttribute('viewBox', `${scrollX} ${scrollY} ${W / zoom} ${h}`);
+      ink.setAttribute('viewBox', view.getAttribute('viewBox'));
       $('#zoom-level').textContent = Math.round(zoom * 100) + '%';
       $('#dots circle').setAttribute('r', 1.1 / zoom); // grid dots stay small however close you are
       $('#zoom').classList.toggle('zoomed', zoom > 1);
@@ -689,7 +702,15 @@
     /* ---------------------------------------------------------------- *
      *  snapping: ends join ends, corners and points; shapes to the grid
      * ---------------------------------------------------------------- */
-    let snapCache = [];
+    // Worked out when first needed and kept until the drawing changes — walking
+    // every stroke at each touch of the Pencil made writing lag once a figure grew
+    let snapCache = null;
+    const snaps = () => snapCache || (snapCache = snapTargets());
+    function drawingChanged() {
+      snapCache = null;
+      const idle = window.requestIdleCallback || (f => setTimeout(f, 50));
+      idle(() => { if (!stroke) snaps(); }); // ready before the Pencil comes down again
+    }
 
     // every end, corner and point already on the page
     function snapTargets(skip = null) {
@@ -728,7 +749,7 @@
 
     function endSnap(p) {
       let best = null, d = SNAP / zoom; // as far on screen at any zoom
-      for (const q of snapCache) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
+      for (const q of snaps()) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
       return best ? { x: best.x, y: best.y, snapped: true } : null;
     }
     const gridSnap = p => ({ x: Math.round((p.x - 12.5) / GRID) * GRID + 12.5, y: Math.round((p.y - 12.5) / GRID) * GRID + 12.5 });
@@ -983,7 +1004,7 @@
     function freehand(raw, startSnapped, full) {
       // all of it measured as it looks on screen: zoomed in, finer detail survives
       const k = zoom;
-      let p = trimHooks(resample(raw.map(q => ({ x: q.x * k, y: q.y * k }))), !startSnapped);
+      let p = resample(raw.map(q => ({ x: q.x * k, y: q.y * k })));
       // How far the smoothing reaches. Drawn: only a little (±2–4 units), so
       // only the wobble of a curve goes — straight pieces and corners stay as
       // drawn. Held at the end: fully (up to ±18 units, twice over), fewer
@@ -992,12 +1013,15 @@
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const q of p) { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y); }
       const size = Math.max(maxX - minX, maxY - minY);
+      // a letter: smoothed a touch, nothing else — its hooks and loops are meant
+      const big = size >= WRITING;
+      if (big) p = trimHooks(p, !startSnapped);
       const R = full ? (size < 50 ? 2 : size < 120 ? 5 : 9) : (size < 50 ? 1 : 2);
       const passes = full ? 2 : 1, eps = full ? 1.5 : 0.5;
       // with an arrow it stays open: a turning arrow keeps its head
-      const loop = style.arrow ? null : loopOf(p);
+      const loop = style.arrow || !big ? null : loopOf(p);
       if (loop) p = loop;
-      else { // ends on another end: joins it
+      else if (big) { // ends on another end: joins it
         const last = p[p.length - 1], end = endSnap({ x: last.x / k, y: last.y / k });
         if (end) p[p.length - 1] = { x: end.x * k, y: end.y * k };
       }
@@ -1088,9 +1112,10 @@
       if (h.undo.length > 200) h.undo.shift();
       h.redo = [];
       h.last = snapshot();
+      drawingChanged();
       paintHistory();
       paintLabels();
-      publish();
+      publishSoon();
     }
     function undo() {
       const h = history();
@@ -1098,6 +1123,7 @@
       h.redo.push(h.last);
       h.last = h.undo.pop();
       restore(h.last);
+      drawingChanged();
       select([]);
       paintHistory(); paintLabels(); publish();
     }
@@ -1107,13 +1133,27 @@
       h.undo.push(h.last);
       h.last = h.redo.pop();
       restore(h.last);
+      drawingChanged();
       select([]);
       paintHistory(); paintLabels(); publish();
     }
     $('#undo').onclick = undo;
     $('#redo').onclick = redo;
 
+    // While writing, the figure goes to the Mac once the Pencil rests a moment (or every
+    // two seconds), not after every stroke: serializing and saving it each time made writing lag
+    let publishTimer = 0, publishDue = 0;
+    function publishSoon() {
+      clearTimeout(publishTimer);
+      if (!publishDue) publishDue = Date.now() + 2000;
+      publishTimer = setTimeout(publish, Math.max(0, Math.min(400, publishDue - Date.now())));
+    }
+    function flushPublish() { if (publishDue) publish(); }
+    window.addEventListener('pagehide', flushPublish);
+
     function publish() {
+      clearTimeout(publishTimer);
+      publishDue = 0;
       send({ type: 'change', key: target.key, svg: serialize(), empty: !content.children.length });
     }
 
@@ -1153,6 +1193,7 @@
     // saved may have layers, other units or its own defs — every object
     // becomes something the eraser can take, at our scale.
     function load(svgText) {
+      drawingChanged();
       content.replaceChildren();
       extraDefs = [];
       if (!svgText) return;
@@ -1208,19 +1249,21 @@
       stage.setPointerCapture(e.pointerId);
       const p = toPage(e);
       send({ type: 'activity' });
-      snapCache = snapTargets();
       const grab = labelAt(e.clientX, e.clientY);
       if (grab) { dragging = { id: e.pointerId, node: grab, x: e.clientX, y: e.clientY, last: p, moved: false }; return; }
       if (tool === 'text') { askText(p); return; }
       if (tool === 'erase') { erasing = { id: e.pointerId, gone: [] }; eraseAt(e.clientX, e.clientY); return; }
       if (tool === 'select') { startPick(e, p); return; }
       if (tool === 'axes') { const o = snapPt(p); axes = { id: e.pointerId, o, c: o }; showSnapMarks([o]); return; }
-      const start = endSnap(p) || p;
-      showSnapMarks([start]);
-      stroke = { id: e.pointerId, pts: [start], snapped: null, anchor: start, path: el('path', { style: styleText() }) };
+      // it starts where the Pencil came down; joining an end there waits until it is bigger than a letter
+      stroke = {
+        id: e.pointerId, pts: [p], snapped: null, anchor: p, big: false, join: null,
+        box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, d: 'M ' + r1(p.x) + ' ' + r1(p.y),
+        path: el('path', { style: styleText() })
+      };
       stroke.path.style.fill = 'none';
       live.appendChild(stroke.path);
-      paintLive();
+      paintLive(e);
     });
 
     stage.addEventListener('pointermove', e => {
@@ -1252,10 +1295,27 @@
         }
         if (dist(p, stroke.pts[stroke.pts.length - 1]) < 0.6 / zoom) continue;
         stroke.pts.push(p);
+        stroke.d += ' L ' + r1(p.x) + ' ' + r1(p.y);
+        grow(stroke, p);
         if (dist(p, stroke.anchor) > 3.5 / zoom) { stroke.anchor = p; armHold(); }
       }
-      if (!stroke.snapped) paintLive();
+      if (!stroke.snapped) paintLive(e);
     });
+
+    // Handwriting stays as written: only a stroke bigger than a letter (on screen) has its
+    // ends joined to others, a flick cut off or a loop closed — that is for figures
+    const WRITING = 60;
+    const isBig = (w, h) => Math.max(w, h) * zoom >= WRITING;
+    function grow(s, p) {
+      const b = s.box;
+      b.x0 = Math.min(b.x0, p.x); b.y0 = Math.min(b.y0, p.y); b.x1 = Math.max(b.x1, p.x); b.y1 = Math.max(b.y1, p.y);
+      if (s.big || !isBig(b.x1 - b.x0, b.y1 - b.y0)) return;
+      s.big = true;
+      s.join = endSnap(s.pts[0]);
+      if (s.join) showSnapMarks([s.join]);
+    }
+    // the points as they are finished: a big stroke starts at the end it joins
+    const strokePts = s => s.join ? [s.join, ...s.pts.slice(1)] : s.pts;
 
     function armHold() {
       clearTimeout(hold);
@@ -1270,15 +1330,21 @@
       }, HOLD_MS);
     }
 
-    function paintLive() {
-      const pts = stroke.pts;
-      stroke.path.setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + r1(p.x) + ' ' + r1(p.y)).join(' ') +
-        (pts.length === 1 ? ' l 0.01 0' : ''));
+    // the stroke so far, a piece added per move — and a little ahead of the Pencil, where
+    // it is about to be, so the line keeps up with it (that guess is redrawn with every move)
+    function paintLive(e) {
+      let d = stroke.d;
+      if (stroke.pts.length === 1) d += ' l 0.01 0';
+      for (const ev of (e && e.getPredictedEvents ? e.getPredictedEvents() : [])) {
+        const q = toPage(ev);
+        d += ' L ' + r1(q.x) + ' ' + r1(q.y);
+      }
+      stroke.path.setAttribute('d', d);
     }
 
     function showSnapped() {
       if (stroke.snapped.type === 'curve') {
-        live.replaceChildren(curveElement(stroke.pts, true));
+        live.replaceChildren(curveElement(strokePts(stroke), true));
         showSnapMarks([]);
         return;
       }
@@ -1295,13 +1361,13 @@
       showSnapMarks([]);
       if (!s) return;
       let node;
-      if (s.snapped && s.snapped.type === 'curve') node = curveElement(s.pts, true);
+      if (s.snapped && s.snapped.type === 'curve') node = curveElement(strokePts(s), true);
       else if (s.snapped) node = shapeElement(s.snapped);
       else if (pathLength(s.pts) < 3 / zoom) {
         // a tap is a point, the kind every geometry figure has
         const c = snapPt(s.pts[0]);
         node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
-      } else node = curveElement(s.pts, false);
+      } else node = curveElement(strokePts(s), false);
       add(node);
       commit();
     }
@@ -1895,6 +1961,7 @@
         case 'target': {
           const same = msg.key === target.key;
           if (!same || msg.reload) {
+            flushPublish(); // what was drawn goes to its own figure first
             cancelText();
             stroke = null; erasing = null; picking = null; axes = null;
             live.replaceChildren(); ui.replaceChildren(); select([]);
