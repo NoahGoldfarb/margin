@@ -332,6 +332,26 @@
       vector-effect: non-scaling-stroke
     }
 
+    /* a selected shape's handles: its centre, corners, a point on a circle */
+    .handle {
+      fill: #fff;
+      stroke: var(--accent);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke
+    }
+
+    .handle.center {
+      fill: var(--accent)
+    }
+
+    .handle-guide {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 1.2;
+      stroke-dasharray: 4 4;
+      vector-effect: non-scaling-stroke
+    }
+
     .snap-mark {
       fill: none;
       stroke: var(--accent);
@@ -670,7 +690,7 @@
     let snapCache = [];
 
     // every end, corner and point already on the page
-    function snapTargets() {
+    function snapTargets(skip = null) {
       const out = [];
       const add = (n, x, y) => out.push(localToPage(n, x, y));
       const walk = n => {
@@ -700,7 +720,7 @@
             break;
         }
       };
-      for (const n of content.children) walk(n);
+      for (const n of content.children) if (n !== skip) walk(n);
       return out;
     }
 
@@ -762,6 +782,23 @@
       return style.grid ? gridSnap(b) : b;
     }
 
+    // How much of a stroke's turning happens at the given corners: near 1 for
+    // straight pieces meeting at corners (a hand-drawn V, Z or triangle scores
+    // 0.8–0.95), lower for a curve, which turns all along (0.3–0.65).
+    // Measured on screen, the wobble smoothed out and its little turns ignored.
+    const ANGULAR = 0.75;
+    function cornerShare(pts, corners) {
+      const k = zoom, span = 6, p = relax(resample(pts.map(q => ({ x: q.x * k, y: q.y * k }))), 3);
+      const cs = corners.map(c => ({ x: c.x * k, y: c.y * k }));
+      let total = 0, near = 0;
+      for (let i = span; i < p.length - span; i++) {
+        const a = Math.max(0, turn(p[i - span], p[i], p[i + span]) - 0.1);
+        total += a;
+        if (cs.some(c => dist(p[i], c) < 14 + 2 * span)) near += a;
+      }
+      return total ? near / total : 1;
+    }
+
     function recognize(pts) {
       const u = 1 / zoom; // sizes as they look on screen, at any zoom
       const len = pathLength(pts);
@@ -794,18 +831,20 @@
         eErr /= pts.length; rErr /= pts.length;
         const corners = simplify(pts, 0.09 * diag);
         const n = corners.length - (dist(corners[0], corners[corners.length - 1]) < 0.2 * diag ? 1 : 0);
-        if (n === 3) return { type: 'polygon', pts: corners.slice(0, 3).map(snapPt) };
+        const angular = n >= 3 && cornerShare(pts, corners) > ANGULAR; // a polygon, not a rounded blob
+        if (n === 3 && angular) return { type: 'polygon', pts: corners.slice(0, 3).map(snapPt) };
         if (rErr < eErr * 0.75 && rErr < 0.06 * diag) {
           const p0 = snapPt({ x: minX, y: minY }), p1 = snapPt({ x: maxX, y: maxY });
           return { type: 'rect', x: p0.x, y: p0.y, w: p1.x - p0.x, h: p1.y - p0.y };
         }
+        // four corners, straight sides (a tilted square, a kite): a quadrilateral, not an ellipse
+        if (n === 4 && angular) return { type: 'polygon', pts: corners.slice(0, 4).map(snapPt) };
         if (eErr < 0.09 * diag) {
           const c = style.grid ? gridSnap({ x: cx, y: cy }) : { x: cx, y: cy };
           const grid = v => style.grid ? Math.max(GRID / 2, Math.round(v / (GRID / 2)) * (GRID / 2)) : v;
           if (Math.abs(rx - ry) < 0.16 * Math.max(rx, ry)) return { type: 'circle', cx: c.x, cy: c.y, r: grid((rx + ry) / 2) };
           return { type: 'ellipse', cx: c.x, cy: c.y, rx: grid(rx), ry: grid(ry) };
         }
-        if (n === 4) return { type: 'polygon', pts: corners.slice(0, 4).map(snapPt) };
         return null;
       }
 
@@ -818,7 +857,9 @@
           for (let i = 1; i < corners.length; i++) best = Math.min(best, segDist(p, corners[i - 1], corners[i]));
           fit = Math.max(fit, best);
         }
-        if (fit < Math.max(5 * u, 0.05 * diag)) return { type: 'polyline', pts: corners.map(snapPt) };
+        // straight pieces meeting at corners — a curve held still is smoothed instead
+        if (fit < Math.max(5 * u, 0.05 * diag) && cornerShare(pts, corners.slice(1, -1)) > ANGULAR)
+          return { type: 'polyline', pts: corners.map(snapPt) };
       }
       return null;
     }
@@ -891,7 +932,9 @@
     }
 
     // corners: where the stroke turns sharply over a few points — the sharpest of a run
-    function cornersOf(p, loop) {
+    function cornersOf(raw, loop) {
+      // looked for on a lightly smoothed copy, so the Pencil's jitter makes no corners
+      const p = relax(raw, 1);
       const n = p.length, R = 3, at = i => p[loop ? (i + n) % n : i];
       const sharp = [];
       for (let i = loop ? 0 : R; i < (loop ? n : n - R); i++) {
@@ -929,15 +972,26 @@
       return dist(p[cut], p[0]) < 14 ? p.slice(0, cut + 1) : null;
     }
 
-    function freehand(raw, startSnapped) {
+    // a freehand stroke as a path: a little smoothing, or with a hold, fully corrected
+    function curveElement(pts, full) {
+      const f = freehand(pts, !!pts[0].snapped, full);
+      return el('path', { d: f.d, style: styleText(f.loop ? { closed: true } : { open: true }) });
+    }
+
+    function freehand(raw, startSnapped, full) {
       // all of it measured as it looks on screen: zoomed in, finer detail survives
       const k = zoom;
       let p = trimHooks(resample(raw.map(q => ({ x: q.x * k, y: q.y * k }))), !startSnapped);
-      // how far the smoothing reaches: up to ±10 units, less for small strokes —
-      // a letter written by hand keeps its shape
+      // How far the smoothing reaches. Drawn: only a little (±2–4 units), so
+      // only the wobble of a curve goes — straight pieces and corners stay as
+      // drawn. Held at the end: fully (up to ±18 units, twice over), fewer
+      // points, a clean curve. Less for small strokes either way: a letter
+      // written by hand keeps its shape.
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const q of p) { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y); }
-      const size = Math.max(maxX - minX, maxY - minY), R = size < 50 ? 1 : size < 120 ? 3 : 5;
+      const size = Math.max(maxX - minX, maxY - minY);
+      const R = full ? (size < 50 ? 2 : size < 120 ? 5 : 9) : (size < 50 ? 1 : 2);
+      const passes = full ? 2 : 1, eps = full ? 1.5 : 0.5;
       // with an arrow it stays open: a turning arrow keeps its head
       const loop = style.arrow ? null : loopOf(p);
       if (loop) p = loop;
@@ -946,26 +1000,27 @@
         if (end) p[p.length - 1] = { x: end.x * k, y: end.y * k };
       }
       const corners = cornersOf(p, !!loop);
-      if (!loop) return { d: curve(relaxPieces(p, corners, R), false, k), loop: false };
+      if (!loop) return { d: curve(relaxPieces(p, corners, R, passes), false, k, eps), loop: false };
       // a loop is smoothed all the way round: from a corner back to it…
       if (corners.length) {
         const c = corners[0];
         p = p.slice(c).concat(p.slice(0, c), [p[c]]);
-        const out = relaxPieces(p, cornersOf(p, false), R);
+        const out = relaxPieces(p, cornersOf(p, false), R, passes);
         out[0].corner = true; // (the same point as the last one)
-        return { d: curve(out, true, k), loop: true };
+        return { d: curve(out, true, k, eps), loop: true };
       }
       // …or, without one, three times round, keeping the middle
       const n = p.length;
-      return { d: curve(relaxPieces(p.concat(p, p), [], R).slice(n, 2 * n), true, k), loop: true };
+      return { d: curve(relaxPieces(p.concat(p, p), [], R, passes).slice(n, 2 * n), true, k, eps), loop: true };
     }
 
     // smoothed piece by piece between corners, which stay exactly where they are
-    function relaxPieces(p, corners, R) {
+    function relaxPieces(p, corners, R, passes) {
       const cuts = [0, ...corners, p.length - 1];
       let out = [];
       for (let k = 0; k + 1 < cuts.length; k++) {
-        const piece = relax(p.slice(cuts[k], cuts[k + 1] + 1), R);
+        let piece = p.slice(cuts[k], cuts[k + 1] + 1);
+        for (let i = 0; i < passes; i++) piece = relax(piece, R);
         piece[piece.length - 1].corner = k + 1 < cuts.length - 1;
         out = out.concat(k ? piece.slice(1) : piece);
       }
@@ -974,19 +1029,25 @@
 
     // a smooth curve through the points (Catmull–Rom), sharp at corners; a loop closes with Z.
     // The points are k times the page's units (the zoom), written back at the page's.
-    function curve(pts, closed, k) {
+    function curve(pts, closed, k, eps) {
       const pieces = [[]];
       for (const q of pts) { pieces[pieces.length - 1].push(q); if (q.corner) pieces.push([q]); }
-      let p = pieces.flatMap((piece, k) => (k ? simplify(piece, 0.5).slice(1) : simplify(piece, 0.5)));
+      let p = pieces.flatMap((piece, i) => (i ? simplify(piece, eps).slice(1) : simplify(piece, eps)));
       if (closed && p.length > 2 && dist(p[0], p[p.length - 1]) < 0.5) p = p.slice(0, -1);
       p = p.map(q => ({ x: q.x / k, y: q.y / k, corner: q.corner }));
       if (p.length < 3 && !closed) return 'M ' + r1(p[0].x) + ' ' + r1(p[0].y) + ' L ' + r1(p[p.length - 1].x) + ' ' + r1(p[p.length - 1].y);
       const n = p.length, at = i => closed ? p[(i + n) % n] : p[Math.max(0, Math.min(n - 1, i))];
-      const tangent = i => at(i).corner ? { x: 0, y: 0 } : { x: (at(i + 1).x - at(i - 1).x) / 6, y: (at(i + 1).y - at(i - 1).y) / 6 };
+      // the direction through each point (none at a corner); each piece's handles a third of
+      // its own length, so long and short pieces next to each other join without a kink
+      const direction = i => {
+        if (at(i).corner) return { x: 0, y: 0 };
+        const dx = at(i + 1).x - at(i - 1).x, dy = at(i + 1).y - at(i - 1).y, l = Math.hypot(dx, dy);
+        return l ? { x: dx / l, y: dy / l } : { x: 0, y: 0 };
+      };
       let d = 'M ' + r1(p[0].x) + ' ' + r1(p[0].y);
       for (let i = 0; i < (closed ? n : n - 1); i++) {
-        const a = at(i), b = at(i + 1), ta = tangent(i), tb = tangent(i + 1);
-        d += ` C ${r1(a.x + ta.x)} ${r1(a.y + ta.y)} ${r1(b.x - tb.x)} ${r1(b.y - tb.y)} ${r1(b.x)} ${r1(b.y)}`;
+        const a = at(i), b = at(i + 1), ta = direction(i), tb = direction(i + 1), l = dist(a, b) / 3;
+        d += ` C ${r1(a.x + ta.x * l)} ${r1(a.y + ta.y * l)} ${r1(b.x - tb.x * l)} ${r1(b.y - tb.y * l)} ${r1(b.x)} ${r1(b.y)}`;
       }
       return closed ? d + ' Z' : d;
     }
@@ -1179,8 +1240,13 @@
           if (stroke.snapped.type === 'line') {
             stroke.snapped.b = lineEnd(stroke.snapped.a, p);
             showSnapped();
+            continue;
           }
-          continue;
+          // a corrected curve: drawing on makes it freehand again (hold again to correct)
+          if (stroke.snapped.type !== 'curve' || dist(p, stroke.heldAt) < 4 / zoom) continue;
+          stroke.snapped = null;
+          live.replaceChildren(stroke.path);
+          showSnapMarks([]);
         }
         if (dist(p, stroke.pts[stroke.pts.length - 1]) < 0.6 / zoom) continue;
         stroke.pts.push(p);
@@ -1193,9 +1259,11 @@
       clearTimeout(hold);
       hold = setTimeout(() => {
         if (!stroke || stroke.snapped) return;
-        const s = recognize(stroke.pts);
+        // a shape it looks like — else, for a curve, the curve fully smoothed
+        const s = recognize(stroke.pts) || (pathLength(stroke.pts) > 20 / zoom ? { type: 'curve' } : null);
         if (!s) return;
         stroke.snapped = s;
+        stroke.heldAt = stroke.pts[stroke.pts.length - 1];
         showSnapped();
       }, HOLD_MS);
     }
@@ -1207,6 +1275,11 @@
     }
 
     function showSnapped() {
+      if (stroke.snapped.type === 'curve') {
+        live.replaceChildren(curveElement(stroke.pts, true));
+        showSnapMarks([]);
+        return;
+      }
       live.replaceChildren(shapeElement(stroke.snapped));
       const s = stroke.snapped;
       showSnapMarks(s.type === 'line' ? [s.a, s.b] : s.pts || []);
@@ -1220,15 +1293,13 @@
       showSnapMarks([]);
       if (!s) return;
       let node;
-      if (s.snapped) node = shapeElement(s.snapped);
+      if (s.snapped && s.snapped.type === 'curve') node = curveElement(s.pts, true);
+      else if (s.snapped) node = shapeElement(s.snapped);
       else if (pathLength(s.pts) < 3 / zoom) {
         // a tap is a point, the kind every geometry figure has
         const c = snapPt(s.pts[0]);
         node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
-      } else {
-        const f = freehand(s.pts, !!s.pts[0].snapped);
-        node = el('path', { d: f.d, style: styleText(f.loop ? { closed: true } : { open: true }) });
-      }
+      } else node = curveElement(s.pts, false);
       add(node);
       commit();
     }
@@ -1330,12 +1401,13 @@
     }
 
     function paintSelection() {
-      ui.querySelectorAll('.sel-box').forEach(n => n.remove());
+      ui.querySelectorAll('.sel-box, .handle, .handle-guide').forEach(n => n.remove());
       const menu = $('#selmenu');
       const box = selectionBox();
       menu.classList.toggle('hidden', !box || !!picking);
       if (!box) return;
       ui.appendChild(el('rect', { class: 'sel-box', x: box.x, y: box.y, width: box.w, height: box.h, rx: 6 / zoom }));
+      paintHandles();
       if (picking) return;
       const top = pageToClient({ x: box.x + box.w / 2, y: box.y });
       const bottom = pageToClient({ x: box.x + box.w / 2, y: box.y + box.h });
@@ -1344,7 +1416,112 @@
       menu.style.top = (below ? bottom.y + 56 : top.y - 8) + 'px';
     }
 
+    /* Handles: one shape selected, the points that make it, to drag — a
+       circle's centre and a point on it (drag that onto a point and the
+       circle goes through it), an ellipse's centre and its two radii, a
+       rectangle's corners, the corners of a line, polyline or polygon.
+       They snap to other points and the grid like the ends of strokes. */
+    const num = (n, a) => +n.getAttribute(a);
+
+    // a path of straight pieces only, as our lines and polygons are: its corners
+    function polyPoints(n) {
+      const d = n.getAttribute('d') || '';
+      if (!/^\s*M[^A-Za-z]*(L[^A-Za-z]*)*(Z\s*)?$/.test(d)) return null;
+      const v = d.match(/-?\d*\.?\d+(?:e-?\d+)?/g).map(Number), pts = [];
+      for (let i = 0; i + 1 < v.length; i += 2) pts.push({ x: v[i], y: v[i + 1] });
+      return pts.length >= 2 ? { pts, closed: /Z\s*$/.test(d) } : null;
+    }
+
+    function handlesOf(n) {
+      if (!n || n.hasAttribute('transform') || isLocked(n)) return [];
+      switch (n.localName) {
+        case 'circle': {
+          if (readStyle(n).get('stroke') === 'none') return []; // a point: it moves as a whole
+          const cx = num(n, 'cx'), cy = num(n, 'cy'), r = num(n, 'r'), a = n._handleAngle || 0;
+          return [{ k: 'center', x: cx, y: cy }, { k: 'radius', x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }];
+        }
+        case 'ellipse': {
+          const cx = num(n, 'cx'), cy = num(n, 'cy');
+          return [{ k: 'center', x: cx, y: cy }, { k: 'rx', x: cx + num(n, 'rx'), y: cy }, { k: 'ry', x: cx, y: cy - num(n, 'ry') }];
+        }
+        case 'rect': {
+          const x = num(n, 'x'), y = num(n, 'y'), w = num(n, 'width'), h = num(n, 'height');
+          return [{ k: 0, x, y }, { k: 1, x: x + w, y }, { k: 2, x: x + w, y: y + h }, { k: 3, x, y: y + h }];
+        }
+        case 'path': {
+          const poly = polyPoints(n);
+          return poly ? poly.pts.map((q, i) => ({ k: i, x: q.x, y: q.y })) : [];
+        }
+      }
+      return [];
+    }
+
+    function paintHandles() {
+      if (selection.length !== 1 || (picking && picking.mode === 'move')) return;
+      const n = selection[0], hs = handlesOf(n);
+      if (n.localName === 'circle' && hs.length) // the radius, from the centre to the point on the circle
+        ui.appendChild(el('path', { class: 'handle-guide', d: `M ${hs[0].x} ${hs[0].y} L ${hs[1].x} ${hs[1].y}` }));
+      for (const h of hs) ui.appendChild(el('circle', { class: 'handle' + (h.k === 'center' ? ' center' : ''), cx: h.x, cy: h.y, r: 7 / zoom }));
+    }
+
+    // the handle under the Pencil (a generous 24 px), if any
+    function handleAt(cx, cy) {
+      if (selection.length !== 1) return null;
+      let best = null, bd = 24;
+      for (const h of handlesOf(selection[0])) {
+        const c = pageToClient(h), d = Math.hypot(c.x - cx, c.y - cy);
+        if (d < bd) { bd = d; best = h; }
+      }
+      return best;
+    }
+
+    function setHandle(n, h, p, fixed) {
+      switch (n.localName) {
+        case 'circle':
+          if (h.k === 'center') { n.setAttribute('cx', r1(p.x)); n.setAttribute('cy', r1(p.y)); break; }
+          n.setAttribute('r', r1(Math.max(1, dist(p, { x: num(n, 'cx'), y: num(n, 'cy') }))));
+          n._handleAngle = Math.atan2(p.y - num(n, 'cy'), p.x - num(n, 'cx'));
+          break;
+        case 'ellipse':
+          if (h.k === 'center') { n.setAttribute('cx', r1(p.x)); n.setAttribute('cy', r1(p.y)); }
+          else if (h.k === 'rx') n.setAttribute('rx', r1(Math.max(1, Math.abs(p.x - num(n, 'cx')))));
+          else n.setAttribute('ry', r1(Math.max(1, Math.abs(p.y - num(n, 'cy')))));
+          break;
+        case 'rect': // the opposite corner stays where it is
+          n.setAttribute('x', r1(Math.min(p.x, fixed.x))); n.setAttribute('y', r1(Math.min(p.y, fixed.y)));
+          n.setAttribute('width', r1(Math.max(1, Math.abs(p.x - fixed.x)))); n.setAttribute('height', r1(Math.max(1, Math.abs(p.y - fixed.y))));
+          break;
+        case 'path': {
+          const poly = polyPoints(n);
+          poly.pts[h.k] = p;
+          n.setAttribute('d', poly.pts.map((q, i) => (i ? 'L ' : 'M ') + r1(q.x) + ' ' + r1(q.y)).join(' ') + (poly.closed ? ' Z' : ''));
+          break;
+        }
+      }
+    }
+
+    function startHandle(e, h) {
+      const n = selection[0];
+      const fixed = n.localName === 'rect' ? handlesOf(n)[(h.k + 2) % 4] : null;
+      picking = { id: e.pointerId, mode: 'handle', node: n, h, fixed, snaps: snapTargets(n), moved: false };
+      paintSelection();
+    }
+
+    function moveHandle(p) {
+      const { node, h, fixed, snaps } = picking;
+      // onto another shape's point, else the grid when it is on
+      let best = null, d = SNAP / zoom;
+      for (const q of snaps) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
+      const at = best ? { x: best.x, y: best.y, snapped: true } : style.grid ? gridSnap(p) : p;
+      setHandle(node, h, at, fixed);
+      picking.moved = true;
+      showSnapMarks([at]);
+      paintSelection();
+    }
+
     function startPick(e, p) {
+      const grip = handleAt(e.clientX, e.clientY);
+      if (grip) { startHandle(e, grip); return; }
       const box = selectionBox();
       const inside = box && p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h;
       if (!inside) {
@@ -1359,6 +1536,7 @@
     }
 
     function movePick(p) {
+      if (picking.mode === 'handle') { moveHandle(p); return; }
       if (picking.mode === 'move') {
         const dx = p.x - picking.last.x, dy = p.y - picking.last.y;
         if (!dx && !dy) return;
@@ -1374,6 +1552,7 @@
     function endPick() {
       const done = picking;
       picking = null;
+      if (done.mode === 'handle') { showSnapMarks([]); if (done.moved) commit(); paintSelection(); return; }
       if (done.mode === 'move') { if (done.moved) commit(); paintSelection(); return; }
       done.path.remove();
       if (pathLength(done.pts) < 12 / zoom) { select([]); return; }
@@ -1609,7 +1788,12 @@
       clearTimeout(hold);
       if (dragging) { const d = dragging; dragging = null; if (d.moved && !isTyping(d.node)) commit(); }
       if (erasing) endErase();
-      if (picking) { picking.path && picking.path.remove(); picking = null; paintSelection(); }
+      if (picking) { // what was already moved or reshaped stays, as one undo step
+        const done = picking;
+        done.path && done.path.remove(); picking = null;
+        if (done.moved) commit();
+        paintSelection();
+      }
       stroke = null; axes = null; live.replaceChildren(); showSnapMarks([]);
     });
 

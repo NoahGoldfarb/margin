@@ -214,17 +214,21 @@ where the caret is in your note.
 
 On the pad:
 
-- **Hold the Pencil still** at the end of a stroke and it becomes a straight
-  line (snapped to 0°/45°/90° when close), circle, ellipse, rectangle,
-  triangle or a few joined straight pieces. A tap is a point.
+- **Hold the Pencil still** at the end of a stroke and it is corrected fully:
+  a straight line (snapped to 0°/45°/90° when close), circle, ellipse,
+  rectangle, triangle, quadrilateral or a few joined straight pieces — and a
+  curve that is none of these becomes a clean, smooth curve. Only strokes
+  with real corners become straight pieces; a wave stays a wave. Draw on
+  after holding and it is freehand again. A tap is a point.
 - **Zoom in for the fine work**: pinch with two fingers (up to 8×), move
   around with two fingers; or **− / % / +** in the bottom-right corner, where
   tapping the percentage goes back to the whole width. Joining up, shape
   snapping and the tidying of strokes go by how things look on screen, so
   detail drawn zoomed in stays as fine as you drew it. While the Pencil is
   down the page never moves, so a resting palm cannot drag it away.
-- **Freehand strokes come out neat**: the Pencil's wobble is evened out, the
-  little flick it leaves as it lands or lifts is cut off, corners stay sharp,
+- **Freehand strokes stay as you drew them**, only a little neater: the
+  wobble of curves is smoothed a little, straight pieces and corners stay as
+  drawn, the little flick the Pencil leaves as it lands or lifts is cut off,
   and a loop closes without a seam. Small strokes, like a letter written by
   hand, keep their shape.
 - **Lines join up by themselves**: a stroke that starts or ends near another
@@ -242,6 +246,11 @@ On the pad:
 - **Select** — tap a stroke, or draw a loop around several. Drag them
   anywhere; **Duplicate** or **Delete** them; and any style button or colour
   now changes them, so you can draw first and style afterwards.
+- **Change a shape afterwards**: select one shape and it shows handles — a
+  circle its centre and a point on it (drag the point onto another point and
+  the circle goes through it), an ellipse its centre and both radii, a
+  rectangle its corners, a line, polyline or polygon each of its corners.
+  Handles snap to other points and to the grid.
 - **Axes** — press at the origin and drag: both axes with arrows and `$x$`,
   `$y$` labels in one go. Drag in one direction only for a number line.
 - **Text** — tap where the label goes and type it on the Mac, with the
