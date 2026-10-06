@@ -122,7 +122,7 @@
     #swatches {
       flex: none;
       display: grid;
-      grid-template-columns: 22px 22px;
+      grid-template-columns: 22px 22px 22px;
       gap: 5px;
       padding: 0 3px
     }
@@ -361,6 +361,13 @@
       vector-effect: non-scaling-stroke
     }
 
+    .eraser-ring {
+      fill: rgba(29, 32, 39, .06);
+      stroke: #8a8d93;
+      stroke-width: 1.2;
+      vector-effect: non-scaling-stroke
+    }
+
     .snap-mark {
       fill: none;
       stroke: var(--accent);
@@ -383,20 +390,20 @@
       <svg viewBox="0 0 30 18"><path d="M9 1 L9 15 L13 11 L16 17 L18.5 16 L15.5 10 L21 10 Z" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round"/></svg>Select</button>
     <button data-tool="text" title="Tap where a label goes, then type it on the Mac — drag a label to move it">
       <svg viewBox="0 0 30 18"><text x="15" y="15" text-anchor="middle" font-family="serif" font-style="italic" font-size="17" fill="#1d2027" stroke="none">A</text></svg>Text</button>
-    <button data-tool="erase" title="Eraser: strike through whole strokes">
-      <svg viewBox="0 0 30 18"><path d="M8 15 L4 11 L13 2 L21 10 L16 15 Z M10 7 L17 14 M8 15 H26" fill="none" stroke="#1d2027" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>Eraser</button>
-    <button data-tool="axes" title="Axes: press at the origin and drag — one direction only gives a number line">
-      <svg viewBox="0 0 30 18"><path d="M8 17 V2 M5 5 L8 1 L11 5 M6 14 H27 M23 11 L27 14 L23 17" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>Axes</button>
+    <button data-tool="erase" title="Eraser: strike through whole strokes — tap again for the pixel eraser, which erases only what it passes over">
+      <svg viewBox="0 0 30 18"><path d="M8 15 L4 11 L13 2 L21 10 L16 15 Z M10 7 L17 14 M8 15 H26" fill="none" stroke="#1d2027" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg><span>Eraser</span></button>
+    <button data-tool="axes" title="Axes: press at the origin and drag — one direction only gives a number line. Tap again for 3D axes">
+      <svg viewBox="0 0 30 18"><path d="M8 17 V2 M5 5 L8 1 L11 5 M6 14 H27 M23 11 L27 14 L23 17" fill="none" stroke="#1d2027" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span>Axes</span></button>
     <span class="sep"></span>
-    <button data-style="thick" title="Thick lines">
-      <svg viewBox="0 0 30 18"><path d="M3 9 H27" stroke="#1d2027" stroke-width="5" stroke-linecap="round"/></svg>Thick</button>
+    <button data-style="thick" title="Line width: normal → thick → very thick">
+      <svg viewBox="0 0 30 18"><path d="M3 9 H27" stroke="#1d2027" stroke-width="5" stroke-linecap="round"/></svg><span>Thick</span></button>
     <button data-style="dashed" title="Dashed lines">
       <svg viewBox="0 0 30 18"><path d="M3 9 H27" stroke="#1d2027" stroke-width="2.4" stroke-dasharray="6 4"/></svg>Dashed</button>
     <button data-style="dotted" title="Dotted lines">
       <svg viewBox="0 0 30 18"><path d="M4 9 H27" stroke="#1d2027" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.01 5.5"/></svg>Dotted</button>
     <button data-style="arrow" title="Arrow: none → at the end → at both ends">
       <svg viewBox="0 0 30 18"></svg><span>Arrow</span></button>
-    <button data-style="fill" title="Fill closed shapes in their colour, see-through — overlaps come out darker → hatched → none">
+    <button data-style="fill" title="Fill closed shapes: in their colour, see-through — overlaps come out darker → hatched → white, covering what is under it → solid → none">
       <svg viewBox="0 0 30 18"></svg><span>Fill</span></button>
     <span class="sep"></span>
     <span id="swatches"></span>
@@ -454,7 +461,8 @@
       { name: 'black', hex: '#000000' },
       { name: 'blue', hex: '#1f5ccc' },
       { name: 'red', hex: '#d1352b' },
-      { name: 'green', hex: '#23884a' }
+      { name: 'green', hex: '#23884a' },
+      { name: 'gray', hex: '#8a8d93' }
     ];
 
     const colorName = hex => {
@@ -493,8 +501,9 @@
     const bridge = window.padBridge || { send() { }, on() { } };
     const send = msg => bridge.send(msg);
 
-    // arrow: 0 none, 1 at the end, 2 at both ends; fill: 0 none, 1 see-through colour, 2 hatched
-    const style = { thick: false, dashed: false, dotted: false, arrow: 0, fill: 0, grid: false, color: '#000000' };
+    // thick: 0 normal, 1 thick, 2 very thick; arrow: 0 none, 1 at the end, 2 at both ends;
+    // fill: 0 none, 1 see-through colour, 2 hatched, 3 white (covers what is under it), 4 solid colour
+    const style = { thick: 0, dashed: false, dotted: false, arrow: 0, fill: 0, grid: false, color: '#000000' };
     let tool = 'pen';                  // 'pen' | 'select' | 'erase' | 'text' | 'axes'
     let target = { key: null, kind: 'none', label: '' };
     let scrollY = 0;                   // page units at the top of the stage
@@ -647,18 +656,30 @@
     /* ---------------------------------------------------------------- *
      *  styles — Castel's table, cut down to the buttons that matter
      * ---------------------------------------------------------------- */
-    const width = () => style.thick ? 5 : 2.5;
+    const WIDTHS = [2.5, 5, 8], DOTS = [3.6, 5, 6.5]; // Castel's normal, thick and very thick
+    const width = () => WIDTHS[style.thick];
     const dashFor = w => style.dashed ? `${4 * w},${3 * w}` : style.dotted ? `0.01,${2.6 * w}` : null;
 
     // A closed shape's fill: 0 none, 1 its colour see-through (overlaps get
-    // darker), 2 hatched in its colour
+    // darker), 2 hatched in its colour, 3 white — it covers what lies under it,
+    // as Castel's discs around points do — 4 its colour, solid
     function setFill(st, kind, c) {
       st.delete('fill-opacity');
       if (kind === 2) st.set('fill', `url(#${hatchId(c)})`);
       else if (kind === 1) { st.set('fill', c); st.set('fill-opacity', String(FILL_ALPHA)); }
+      else if (kind === 3) st.set('fill', '#ffffff');
+      else if (kind === 4) st.set('fill', c);
       else st.set('fill', 'none');
     }
-    const fillKind = st => /url\(#hatch/.test(st.get('fill') || '') ? 2 : isFilled(st) ? 1 : 0;
+    const fillKind = st => {
+      const f = (st.get('fill') || '').toLowerCase();
+      if (/url\(#hatch/.test(f)) return 2;
+      if (!isFilled(st)) return 0;
+      if (f === '#ffffff' || f === '#fff' || f === 'white') return 3;
+      return st.has('fill-opacity') ? 1 : 4;
+    };
+    // see-through and hatched fills go under the lines; white and solid ones cover them
+    const fillsUnder = st => [1, 2].includes(fillKind(st));
     // an outline with something inside (a dot is all fill, a label is text)
     const isFilled = st => (st.get('fill') || 'none') !== 'none' && (st.get('stroke') || 'none') !== 'none';
 
@@ -712,46 +733,173 @@
       idle(() => { if (!stroke) snaps(); }); // ready before the Pencil comes down again
     }
 
-    // every end, corner and point already on the page
+    /* What the Pencil snaps to, as Castel's figures need: points — every end,
+       corner, dot, centre, the middle of a straight piece and wherever two lines
+       or circles cross — and, failing those, any point on a line, circle or
+       curve, so a triangle's corners sit on its circle and a line ends on another.
+       Handwriting (small freehand strokes) is left out: letters attract nothing. */
+    const OUTLINE_MIN = 60; // a freehand path smaller than this (in page units) is writing
+
+    // a node's own coordinates → the page's, with one CTM per node
+    function pageMapper(n) {
+      const m = n.getScreenCTM();
+      if (!m) return (x, y) => ({ x, y });
+      return (x, y) => { const q = new DOMPoint(x, y).matrixTransform(m); return clientToPage(q.x, q.y); };
+    }
+
+    // our paths (absolute M, L, C, Z) as polylines, curves cut into short pieces; null for anything else
+    function flattenPath(d) {
+      if (!/^[MLCZ\d\s.,eE-]+$/.test(d)) return null;
+      const tok = d.match(/[MLCZ]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+      const lines = []; let cur = null, at = null, i = 0, curved = false;
+      const num = () => +tok[i++];
+      while (i < tok.length) {
+        const c = tok[i++];
+        if (c === 'M') { at = { x: num(), y: num() }; cur = { pts: [at], closed: false }; lines.push(cur); }
+        else if (c === 'L') { while (i < tok.length && !/[A-Z]/.test(tok[i])) { at = { x: num(), y: num() }; cur.pts.push(at); } }
+        else if (c === 'C') {
+          curved = true;
+          while (i < tok.length && !/[A-Z]/.test(tok[i])) {
+            const a = at, b = { x: num(), y: num() }, e = { x: num(), y: num() }, f = { x: num(), y: num() };
+            const n = Math.max(2, Math.min(16, Math.ceil((dist(a, b) + dist(b, e) + dist(e, f)) / 6)));
+            for (let k = 1; k <= n; k++) {
+              const t = k / n, u = 1 - t;
+              cur.pts.push({
+                x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * e.x + t * t * t * f.x,
+                y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * e.y + t * t * t * f.y
+              });
+            }
+            at = f;
+          }
+        } else if (c === 'Z') { if (cur) { cur.closed = true; at = cur.pts[0]; } }
+        else return null;
+        if (!cur) return null;
+      }
+      return { lines, curved };
+    }
+
     function snapTargets(skip = null) {
-      const out = [];
-      const add = (n, x, y) => out.push(localToPage(n, x, y));
+      const pts = [], outlines = [];
+      const outline = (list, closed) => {
+        if (list.length < 2) return;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const q of list) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+        outlines.push({ pts: closed ? list.concat([list[0]]) : list, box: { x0, y0, x1, y1 } });
+      };
+      const straight = (list, closed) => { // its corners and the middle of each piece
+        pts.push(...list);
+        const segs = closed ? list.length : list.length - 1;
+        for (let i = 0; i < segs; i++) {
+          const a = list[i], b = list[(i + 1) % list.length];
+          pts.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+        }
+        outline(list, closed);
+      };
+      const ring = (map, cx, cy, rx, ry) => {
+        const list = [];
+        for (let k = 0; k < 128; k++) { const t = k / 128 * 2 * Math.PI; list.push(map(cx + rx * Math.cos(t), cy + ry * Math.sin(t))); }
+        outline(list, true);
+      };
       const walk = n => {
+        if (n === skip) return;
+        const num = a => +n.getAttribute(a);
         switch (n.localName) {
           case 'g': for (const c of n.children) walk(c); break;
           case 'path': {
-            const d = n.getAttribute('d') || '';
-            if (/^[MLZ\d\s.,-]+$/.test(d)) {
-              const nums = d.match(/-?\d*\.?\d+/g).map(Number);
-              for (let i = 0; i + 1 < nums.length; i += 2) add(n, nums[i], nums[i + 1]);
-            } else {
-              try {
-                const len = n.getTotalLength(), a = n.getPointAtLength(0), b = n.getPointAtLength(len);
-                add(n, a.x, a.y); add(n, b.x, b.y);
-              } catch { /* not a drawable path */ }
+            const map = pageMapper(n), f = flattenPath(n.getAttribute('d') || '');
+            if (f) {
+              const all = f.lines.map(l => ({ pts: l.pts.map(q => map(q.x, q.y)), closed: l.closed }));
+              if (f.curved) {
+                const b = all.flatMap(l => l.pts);
+                const size = Math.max(Math.max(...b.map(q => q.x)) - Math.min(...b.map(q => q.x)), Math.max(...b.map(q => q.y)) - Math.min(...b.map(q => q.y)));
+                if (size < OUTLINE_MIN) break; // writing
+                for (const l of all) { if (!l.closed) pts.push(l.pts[0], l.pts[l.pts.length - 1]); outline(l.pts, l.closed); }
+              } else for (const l of all) straight(l.pts, l.closed);
+              break;
             }
+            try { // someone else's path (Inkscape's): its ends, and points along it
+              const len = n.getTotalLength(), steps = Math.max(2, Math.min(200, Math.ceil(len / 5))), list = [];
+              for (let k = 0; k <= steps; k++) { const q = n.getPointAtLength(len * k / steps); list.push(map(q.x, q.y)); }
+              pts.push(list[0], list[list.length - 1]);
+              outline(list, false);
+            } catch { /* not a drawable path */ }
             break;
           }
-          case 'circle': case 'ellipse': add(n, +n.getAttribute('cx'), +n.getAttribute('cy')); break;
+          case 'circle': {
+            const map = pageMapper(n);
+            pts.push(map(num('cx'), num('cy')));
+            if (readStyle(n).get('stroke') !== 'none') ring(map, num('cx'), num('cy'), num('r'), num('r')); // a dot is only its centre
+            break;
+          }
+          case 'ellipse': {
+            const map = pageMapper(n);
+            pts.push(map(num('cx'), num('cy')));
+            ring(map, num('cx'), num('cy'), num('rx'), num('ry'));
+            break;
+          }
           case 'rect': {
-            const x = +n.getAttribute('x'), y = +n.getAttribute('y'), w = +n.getAttribute('width'), h = +n.getAttribute('height');
-            add(n, x, y); add(n, x + w, y); add(n, x, y + h); add(n, x + w, y + h);
+            const map = pageMapper(n), x = num('x'), y = num('y'), w = num('width'), h = num('height');
+            straight([map(x, y), map(x + w, y), map(x + w, y + h), map(x, y + h)], true);
             break;
           }
-          case 'line':
-            add(n, +n.getAttribute('x1'), +n.getAttribute('y1')); add(n, +n.getAttribute('x2'), +n.getAttribute('y2'));
+          case 'line': {
+            const map = pageMapper(n);
+            straight([map(num('x1'), num('y1')), map(num('x2'), num('y2'))], false);
             break;
+          }
         }
       };
-      for (const n of content.children) if (n !== skip) walk(n);
+      for (const n of content.children) walk(n);
+      pts.push(...crossings(outlines));
+      return { pts, outlines };
+    }
+
+    // where two outlines cross (not where one crosses itself)
+    function crossings(outlines) {
+      const out = [];
+      if (outlines.reduce((n, o) => n + o.pts.length, 0) > 6000) return out; // too much to look through
+      const meet = (a, b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+      for (let i = 0; i < outlines.length; i++) for (let j = i + 1; j < outlines.length; j++) {
+        const A = outlines[i], B = outlines[j];
+        if (!meet(A.box, B.box)) continue;
+        for (let k = 1; k < A.pts.length; k++) {
+          const p = A.pts[k - 1], q = A.pts[k];
+          const sa = { x0: Math.min(p.x, q.x), y0: Math.min(p.y, q.y), x1: Math.max(p.x, q.x), y1: Math.max(p.y, q.y) };
+          if (!meet(sa, B.box)) continue;
+          for (let m = 1; m < B.pts.length; m++) {
+            const r = B.pts[m - 1], t = B.pts[m];
+            const dx = q.x - p.x, dy = q.y - p.y, ex = t.x - r.x, ey = t.y - r.y, den = dx * ey - dy * ex;
+            if (!den) continue;
+            const u = ((r.x - p.x) * ey - (r.y - p.y) * ex) / den, v = ((r.x - p.x) * dy - (r.y - p.y) * dx) / den;
+            // the far end of a piece only, so a crossing at a joint counts once
+            if (u > 0 && u <= 1 && v > 0 && v <= 1) out.push({ x: p.x + u * dx, y: p.y + u * dy });
+          }
+        }
+      }
       return out;
     }
 
-    function endSnap(p) {
-      let best = null, d = SNAP / zoom; // as far on screen at any zoom
-      for (const q of snaps()) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
+    // the nearest point within reach: a point first, else somewhere on an outline
+    function snapWith(t, p, reach = SNAP / zoom) {
+      let best = null, d = reach;
+      for (const q of t.pts) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
+      if (best) return { x: best.x, y: best.y, snapped: true };
+      d = reach * 0.8;
+      for (const o of t.outlines) {
+        const b = o.box;
+        if (p.x < b.x0 - d || p.x > b.x1 + d || p.y < b.y0 - d || p.y > b.y1 + d) continue;
+        for (let k = 1; k < o.pts.length; k++) {
+          const a = o.pts[k - 1], c = o.pts[k], dx = c.x - a.x, dy = c.y - a.y, l = dx * dx + dy * dy;
+          const u = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0;
+          const q = { x: a.x + u * dx, y: a.y + u * dy }, e = dist(p, q);
+          if (e < d) { d = e; best = q; }
+        }
+      }
       return best ? { x: best.x, y: best.y, snapped: true } : null;
     }
+    const endSnap = p => snapWith(snaps(), p);
+    // only a point (a centre for a circle drawn around it), from a little further away
+    const pointSnap = (p, reach) => snapWith({ pts: snaps().pts, outlines: [] }, p, reach);
     const gridSnap = p => ({ x: Math.round((p.x - 12.5) / GRID) * GRID + 12.5, y: Math.round((p.y - 12.5) / GRID) * GRID + 12.5 });
     // an end of a straight piece: another end first, else the grid when it is on
     const snapPt = p => endSnap(p) || (style.grid ? gridSnap(p) : p);
@@ -789,11 +937,13 @@
       return simplify(pts.slice(0, at + 1), eps).slice(0, -1).concat(simplify(pts.slice(at), eps));
     }
 
-    // a straight line snaps to 0°, 45°, 90° … when it is close
+    // a straight line snaps to 0°, 45°, 90° … when it is close, and — closer still —
+    // to 30° and 60°, the angles of oblique 3D axes and of equilateral triangles
     function snapAngle(a, b) {
       const ang = Math.atan2(b.y - a.y, b.x - a.x), len = dist(a, b);
-      const step = Math.PI / 4, near = Math.round(ang / step) * step;
-      if (Math.abs(ang - near) > 0.12) return b;
+      const step = Math.PI / 12, k = Math.round(ang / step), near = k * step, m = ((k % 6) + 6) % 6;
+      const reach = m % 3 === 0 ? 0.12 : m === 2 || m === 4 ? 0.06 : 0; // 15° and 75° are no angle of ours
+      if (Math.abs(ang - near) > reach) return b;
       return { x: a.x + Math.cos(near) * len, y: a.y + Math.sin(near) * len };
     }
 
@@ -863,7 +1013,9 @@
         // four corners, straight sides (a tilted square, a kite): a quadrilateral, not an ellipse
         if (n === 4 && angular) return { type: 'polygon', pts: corners.slice(0, 4).map(snapPt) };
         if (eErr < 0.09 * diag) {
-          const c = style.grid ? gridSnap({ x: cx, y: cy }) : { x: cx, y: cy };
+          // drawn around a point (a dot, a corner, a crossing): centred on it
+          const c = pointSnap({ x: cx, y: cy }, Math.max(SNAP / zoom, 0.3 * Math.min(rx, ry))) ||
+            (style.grid ? gridSnap({ x: cx, y: cy }) : { x: cx, y: cy });
           const grid = v => style.grid ? Math.max(GRID / 2, Math.round(v / (GRID / 2)) * (GRID / 2)) : v;
           if (Math.abs(rx - ry) < 0.16 * Math.max(rx, ry)) return { type: 'circle', cx: c.x, cy: c.y, r: grid((rx + ry) / 2) };
           return { type: 'ellipse', cx: c.x, cy: c.y, rx: grid(rx), ry: grid(ry) };
@@ -884,7 +1036,76 @@
         if (fit < Math.max(5 * u, 0.05 * diag) && cornerShare(pts, corners.slice(1, -1)) > ANGULAR)
           return { type: 'polyline', pts: corners.map(snapPt) };
       }
-      return null;
+      return arcOf(pts, u);
+    }
+
+    /* An arc: an open stroke that keeps to one circle — a quarter circle between
+       two axes, the arc marking an angle. Its ends snap like a line's, and it
+       becomes the arc of the circle through them and the stroke's middle. */
+    function arcOf(pts, u) {
+      if (pts.length < 8) return null;
+      // the circle nearest all the points (Kåsa's fit: x² + y² + Dx + Ey + F = 0)
+      let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sz = 0, sxz = 0, syz = 0;
+      const n = pts.length, o = pts[0];
+      for (const q of pts) {
+        const x = q.x - o.x, y = q.y - o.y, z = x * x + y * y;
+        sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; sz += z; sxz += x * z; syz += y * z;
+      }
+      const M = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]], v = [-sxz, -syz, -sz];
+      const det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+      const D0 = det(M);
+      if (Math.abs(D0) < 1e-9) return null;
+      const col = i => det(M.map((row, r) => row.map((x, c) => c === i ? v[r] : x)));
+      const D = col(0) / D0, E = col(1) / D0, F = col(2) / D0;
+      const c = { x: o.x - D / 2, y: o.y - E / 2 }, r = Math.sqrt(D * D / 4 + E * E / 4 - F);
+      if (!(r > 10 * u) || r > 2000) return null;
+      let mean = 0, worst = 0;
+      for (const q of pts) { const e = Math.abs(dist(q, c) - r); mean += e; worst = Math.max(worst, e); }
+      mean /= n;
+      if (mean > Math.max(1.5 * u, 0.03 * r) || worst > Math.max(4 * u, 0.09 * r)) return null;
+      // it goes round one way, less than all the way
+      let sweep = 0, back = 0, prev = Math.atan2(pts[0].y - c.y, pts[0].x - c.x);
+      for (const q of pts.slice(1)) {
+        const a = Math.atan2(q.y - c.y, q.x - c.x);
+        let da = a - prev; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
+        sweep += da; if (da * sweep < 0) back += Math.abs(da); prev = a;
+      }
+      if (Math.abs(sweep) < 0.35 || Math.abs(sweep) > 5.9 || back > 0.15 * Math.abs(sweep)) return null;
+      const a0 = Math.atan2(pts[0].y - c.y, pts[0].x - c.x), am = a0 + sweep / 2;
+      const mid = { x: c.x + r * Math.cos(am), y: c.y + r * Math.sin(am) };
+      const A = snapPt(pts[0]), B = snapPt(pts[n - 1]);
+      return arcThrough(A, mid, B) || null;
+    }
+
+    // the arc from a through m to b
+    function arcThrough(a, m, b) {
+      const d = 2 * (a.x * (m.y - b.y) + m.x * (b.y - a.y) + b.x * (a.y - m.y));
+      if (Math.abs(d) < 1e-6) return null;
+      const sq = q => q.x * q.x + q.y * q.y;
+      const c = {
+        x: (sq(a) * (m.y - b.y) + sq(m) * (b.y - a.y) + sq(b) * (a.y - m.y)) / d,
+        y: (sq(a) * (b.x - m.x) + sq(m) * (a.x - b.x) + sq(b) * (m.x - a.x)) / d
+      };
+      const r = dist(a, c), ang = q => Math.atan2(q.y - c.y, q.x - c.x);
+      const turn = (from, to) => { let t = to - from; while (t < 0) t += 2 * Math.PI; return t; }; // counter-clockwise
+      const ta = ang(a), tm = turn(ta, ang(m)), tb = turn(ta, ang(b));
+      const sweep = tm < tb ? tb : tb - 2 * Math.PI; // the way that passes m
+      return { type: 'arc', c, r, from: ta, sweep, pts: [a, b] };
+    }
+
+    // an arc as Bézier pieces of at most 90° each, so it moves and snaps like our other paths
+    function arcPath(s) {
+      const n = Math.max(1, Math.ceil(Math.abs(s.sweep) / (Math.PI / 2) - 1e-9)), step = s.sweep / n;
+      const k = 4 / 3 * Math.tan(step / 4), at = t => ({ x: s.c.x + s.r * Math.cos(t), y: s.c.y + s.r * Math.sin(t) });
+      let t = s.from, p = s.pts[0], d = 'M ' + r1(p.x) + ' ' + r1(p.y);
+      for (let i = 0; i < n; i++) {
+        const t2 = t + step, q = i === n - 1 ? s.pts[1] : at(t2);
+        const c1 = { x: p.x - k * s.r * Math.sin(t), y: p.y + k * s.r * Math.cos(t) };
+        const c2 = { x: q.x + k * s.r * Math.sin(t2), y: q.y - k * s.r * Math.cos(t2) };
+        d += ` C ${r1(c1.x)} ${r1(c1.y)} ${r1(c2.x)} ${r1(c2.y)} ${r1(q.x)} ${r1(q.y)}`;
+        t = t2; p = q;
+      }
+      return d;
     }
 
     function shapeElement(s) {
@@ -892,6 +1113,7 @@
       switch (s.type) {
         case 'line': return el('path', { d: d([s.a, s.b]), style: styleText({ open: true }) });
         case 'polyline': return el('path', { d: d(s.pts), style: styleText({ open: true }) });
+        case 'arc': return el('path', { d: arcPath(s), style: styleText({ open: true }) });
         case 'polygon': return el('path', { d: d(s.pts) + ' Z', style: styleText({ closed: true }) });
         case 'rect': return el('rect', {
           x: r1(Math.min(s.x, s.x + s.w)), y: r1(Math.min(s.y, s.y + s.h)),
@@ -1241,6 +1463,7 @@
      *  the Pencil — one gesture at a time, whichever tool is in hand
      * ---------------------------------------------------------------- */
     let stroke = null, erasing = null, picking = null, axes = null, dragging = null, hold = 0;
+    let axes3d = false; // the Axes tool tapped twice: x, y and z
 
     stage.addEventListener('pointerdown', e => {
       if (e.pointerType === 'touch' || e.button > 0) return; // fingers scroll
@@ -1252,6 +1475,7 @@
       const grab = labelAt(e.clientX, e.clientY);
       if (grab) { dragging = { id: e.pointerId, node: grab, x: e.clientX, y: e.clientY, last: p, moved: false }; return; }
       if (tool === 'text') { askText(p); return; }
+      if (tool === 'erase' && eraseMode === 'pixel') { startPixelErase(e); return; }
       if (tool === 'erase') { erasing = { id: e.pointerId, gone: [] }; eraseAt(e.clientX, e.clientY); return; }
       if (tool === 'select') { startPick(e, p); return; }
       if (tool === 'axes') { const o = snapPt(p); axes = { id: e.pointerId, o, c: o }; showSnapMarks([o]); return; }
@@ -1273,7 +1497,13 @@
       if (dragging) { moveDrag(e); return; }
       const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
       if (erasing) {
-        for (const ev of evs.length ? evs : [e]) eraseAt(ev.clientX, ev.clientY);
+        for (const ev of evs.length ? evs : [e]) {
+          if (erasing.mode !== 'pixel') { eraseAt(ev.clientX, ev.clientY); continue; }
+          const at = { x: ev.clientX, y: ev.clientY };
+          if (Math.hypot(at.x - erasing.last.x, at.y - erasing.last.y) < 1) continue;
+          erasePixels(erasing.last, at);
+          erasing.last = at;
+        }
         return;
       }
       if (picking) { movePick(toPage(e)); return; }
@@ -1366,16 +1596,16 @@
       else if (pathLength(s.pts) < 3 / zoom) {
         // a tap is a point, the kind every geometry figure has
         const c = snapPt(s.pts[0]);
-        node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: style.thick ? 5 : 3.6, style: styleText({ dot: true }) });
+        node = el('circle', { cx: r1(c.x), cy: r1(c.y), r: DOTS[style.thick], style: styleText({ dot: true }) });
       } else node = curveElement(strokePts(s), false);
       add(node);
       commit();
     }
 
-    // filled shapes go underneath the lines, so a fill never hides one
+    // see-through and hatched shapes go underneath the lines, so such a fill never hides one
     // …but above a locked picture, which stays at the very bottom
     function add(node) {
-      if (isFilled(readStyle(node))) content.insertBefore(node, items().find(n => !isLocked(n)) || null);
+      if (fillsUnder(readStyle(node))) content.insertBefore(node, items().find(n => !isLocked(n)) || null);
       else content.appendChild(node);
     }
 
@@ -1388,6 +1618,18 @@
       const parts = [], tail = 18, color = style.color;
       const st = `fill:none;stroke:${color};stroke-width:${width()};stroke-linecap:round;stroke-linejoin:round;marker-end:url(#${markerId(color)})`;
       const label = (x, y) => el('text', { x: r1(x), y: r1(y), style: `font-size:${TEXT_SIZE}px;font-family:serif;fill:${color}` });
+      if (axes3d) {
+        // z up, y to the right, x towards you (down to the left, shorter), as in Castel's 𝔼³
+        const L = Math.max(Math.abs(dx), Math.abs(dy));
+        if (L < 30 / zoom) return parts;
+        const k = 0.65 * L * Math.SQRT1_2;
+        const ends = [[o.x - k, o.y + k, '$x$', -30, 26], [o.x + L, o.y, '$y$', 10, TEXT_SIZE * 0.35], [o.x, o.y - L, '$z$', 12, 8]];
+        for (const [x, y, name, lx, ly] of ends) {
+          parts.push(el('path', { d: `M ${r1(o.x)} ${r1(o.y)} L ${r1(x)} ${r1(y)}`, style: st }));
+          const t = label(x + lx, y + ly); t.textContent = name; parts.push(t);
+        }
+        return parts;
+      }
       if (Math.abs(dx) >= 30 / zoom) {
         parts.push(el('path', { d: `M ${r1(o.x - tail * sx)} ${r1(o.y)} L ${r1(c.x)} ${r1(o.y)}`, style: st }));
         const t = label(sx > 0 ? c.x + 10 : c.x - 28, o.y + TEXT_SIZE * 0.35); t.textContent = '$x$'; parts.push(t);
@@ -1413,8 +1655,11 @@
     }
 
     /* ---------------------------------------------------------------- *
-     *  eraser: whatever the Pencil passes over goes, whole
+     *  eraser: whatever the Pencil passes over goes, whole — or, as the
+     *  pixel eraser, only the part it passes over
      * ---------------------------------------------------------------- */
+    let eraseMode = 'object'; // 'object' | 'pixel', remembered
+    try { if (localStorage.getItem('pad-erase') === 'pixel') eraseMode = 'pixel'; } catch { }
     const OFFSETS = [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [4, 4], [-4, -4], [4, -4], [-4, 4]];
     function hits(node, cx, cy) {
       if (node instanceof SVGGeometryElement) {
@@ -1446,7 +1691,140 @@
     function endErase() {
       const done = erasing;
       erasing = null;
-      if (done && done.gone.length) commit();
+      ui.querySelectorAll('.eraser-ring').forEach(n => n.remove());
+      if (done && (done.gone.length || done.cut)) commit();
+    }
+
+    /* The pixel eraser: a round eraser (12 px on screen) cuts strokes where it
+       passes. What is left stays vector — each piece its own stroke, straight
+       pieces straight, curves smooth again — so the figure still goes to LaTeX
+       as lines, not pixels. A filled shape that is cut loses its fill (an open
+       outline has no inside); an arrow head stays only on an end left whole.
+       Labels are left alone; points go whole. */
+    const ERASER = 12;
+
+    function startPixelErase(e) {
+      erasing = { id: e.pointerId, gone: [], cut: false, mode: 'pixel', last: { x: e.clientX, y: e.clientY } };
+      ui.appendChild(el('circle', { class: 'eraser-ring', r: ERASER / scale() }));
+      erasePixels(erasing.last, erasing.last);
+    }
+
+    // the eraser swept from a to b (client px): everything within reach of that path is cut
+    function erasePixels(a, b) {
+      const pa = clientToPage(a.x, a.y), pb = clientToPage(b.x, b.y), R = ERASER / scale();
+      const ring = ui.querySelector('.eraser-ring');
+      if (ring) { ring.setAttribute('cx', pb.x); ring.setAttribute('cy', pb.y); ring.setAttribute('r', R); }
+      const x0 = Math.min(a.x, b.x) - ERASER, x1 = Math.max(a.x, b.x) + ERASER;
+      const y0 = Math.min(a.y, b.y) - ERASER, y1 = Math.max(a.y, b.y) + ERASER;
+      const near = n => { const r = n.getBoundingClientRect(); return r.right >= x0 - 10 && r.left <= x1 + 10 && r.bottom >= y0 - 10 && r.top <= y1 + 10; };
+      const visit = n => {
+        if (isLocked(n) || n.localName === 'text' || !near(n)) return;
+        if (n.localName === 'g') { [...n.children].forEach(visit); return; }
+        cutNode(n, pa, pb, R);
+      };
+      items().forEach(visit);
+    }
+
+    // a shape as polylines in its own coordinates; curved: smooth it again after cutting
+    function outlineOf(n) {
+      const num = k => +n.getAttribute(k);
+      const ring = (cx, cy, rx, ry) => {
+        const pts = [];
+        for (let k = 0; k < 128; k++) { const t = k / 128 * 2 * Math.PI; pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) }); }
+        return { lines: [{ pts, closed: true }], curved: true };
+      };
+      switch (n.localName) {
+        case 'path': {
+          const f = flattenPath(n.getAttribute('d') || '');
+          if (f) return f;
+          try { // someone else's path: sampled along its length
+            const len = n.getTotalLength(), steps = Math.max(2, Math.min(600, Math.ceil(len / 2))), pts = [];
+            for (let k = 0; k <= steps; k++) { const q = n.getPointAtLength(len * k / steps); pts.push({ x: q.x, y: q.y }); }
+            return { lines: [{ pts, closed: /z\s*$/i.test(n.getAttribute('d') || '') }], curved: true };
+          } catch { return null; }
+        }
+        case 'line': return { lines: [{ pts: [{ x: num('x1'), y: num('y1') }, { x: num('x2'), y: num('y2') }], closed: false }], curved: false };
+        case 'polyline': case 'polygon': {
+          const v = (n.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number), pts = [];
+          for (let i = 0; i + 1 < v.length; i += 2) pts.push({ x: v[i], y: v[i + 1] });
+          return { lines: [{ pts, closed: n.localName === 'polygon' }], curved: false };
+        }
+        case 'rect': {
+          const x = num('x'), y = num('y'), w = num('width'), h = num('height');
+          return { lines: [{ pts: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], closed: true }], curved: false };
+        }
+        case 'circle': return ring(num('cx'), num('cy'), num('r'), num('r'));
+        case 'ellipse': return ring(num('cx'), num('cy'), num('rx'), num('ry'));
+      }
+      return null;
+    }
+
+    function cutNode(n, pa, pb, R) {
+      const st = readStyle(n);
+      const m = n.getScreenCTM();
+      if (!m) return;
+      // a point goes whole when the eraser touches it
+      if (n.localName === 'circle' && st.get('stroke') === 'none') {
+        const c = clientToPage(...(p => [p.x, p.y])(new DOMPoint(num(n, 'cx'), num(n, 'cy')).matrixTransform(m)));
+        if (segDist(c, pa, pb) < R + num(n, 'r') * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) / scale()) { n.remove(); erasing.gone.push(n); }
+        return;
+      }
+      const shape = outlineOf(n);
+      if (!shape) return;
+      // the eraser into the shape's own coordinates
+      const inv = m.inverse(), toLocal = p => { const c = pageToClient(p); const q = new DOMPoint(c.x, c.y).matrixTransform(inv); return { x: q.x, y: q.y }; };
+      const la = toLocal(pa), lb = toLocal(pb);
+      const k = scale() / Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)); // page units → its own
+      const reach = R * k + (parseFloat(st.get('stroke-width')) || 1) / 2;
+      const step = Math.max(0.4, reach / 3);
+      let touched = false;
+      const runs = []; // [{ pts, first, last }] — first/last: it reaches the line's own start/end
+      for (const line of shape.lines) {
+        // the line, points every step, each kept or erased
+        const src = line.closed ? line.pts.concat([line.pts[0]]) : line.pts, pts = [src[0]];
+        for (let i = 1; i < src.length; i++) {
+          const p = src[i - 1], q = src[i], l = dist(p, q), parts = Math.max(1, Math.ceil(l / step));
+          for (let j = 1; j <= parts; j++) pts.push({ x: p.x + (q.x - p.x) * j / parts, y: p.y + (q.y - p.y) * j / parts, joint: j === parts });
+        }
+        const keep = pts.map(q => segDist(q, la, lb) > reach);
+        if (keep.every(Boolean)) { runs.push({ pts: line.pts, closed: line.closed, whole: true, first: true, last: true }); continue; }
+        touched = true;
+        let cur = null;
+        const found = [];
+        pts.forEach((q, i) => {
+          if (keep[i]) { if (!cur) found.push(cur = { pts: [], first: i === 0, last: false }); cur.pts.push(q); if (i === pts.length - 1) cur.last = true; }
+          else cur = null;
+        });
+        // a closed line cut open: the piece over its start is one piece
+        if (line.closed && found.length > 1 && found[0].first && found[found.length - 1].last) {
+          const end = found.pop();
+          found[0].pts = end.pts.concat(found[0].pts.slice(1));
+        }
+        if (line.closed) for (const f of found) { f.first = false; f.last = false; }
+        runs.push(...found);
+      }
+      if (!touched) return;
+      erasing.cut = true;
+      const pieces = runs.filter(r => r.pts.length > 1 && pathLength(r.pts) > Math.max(0.5, step));
+      const markStart = st.get('marker-start'), markEnd = st.get('marker-end');
+      pieces.forEach((r, i) => {
+        let d;
+        if (r.whole) d = (shape.curved ? curve(r.pts, r.closed, 1, 0.3) : r.pts.map((q, j) => (j ? 'L ' : 'M ') + r1(q.x) + ' ' + r1(q.y)).join(' ') + (r.closed ? ' Z' : ''));
+        else if (shape.curved) d = curve(r.pts, false, 1, 0.3);
+        else d = simplify(r.pts, 0.05).map((q, j) => (j ? 'L ' : 'M ') + r1(q.x) + ' ' + r1(q.y)).join(' ');
+        const piece = el('path', { d });
+        // its other attributes (a transform, a class) — not Inkscape's own, which would rebuild the old shape
+        for (const at of n.attributes)
+          if (!/^(d|cx|cy|r|rx|ry|x|y|width|height|x1|y1|x2|y2|points|id|style)$|^(sodipodi|inkscape):/.test(at.name)) piece.setAttribute(at.name, at.value);
+        const ps = new Map(st);
+        if (!r.whole) { ps.set('fill', 'none'); ps.delete('fill-opacity'); }
+        ps.delete('marker-start'); ps.delete('marker-end');
+        if (markStart && r.first && i === 0) ps.set('marker-start', markStart);
+        if (markEnd && r.last && i === pieces.length - 1) ps.set('marker-end', markEnd);
+        writeStyle(piece, ps);
+        n.parentNode.insertBefore(piece, n);
+      });
+      n.remove();
     }
 
     /* ---------------------------------------------------------------- *
@@ -1577,10 +1955,8 @@
 
     function moveHandle(p) {
       const { node, h, fixed, snaps } = picking;
-      // onto another shape's point, else the grid when it is on
-      let best = null, d = SNAP / zoom;
-      for (const q of snaps) { const e = dist(p, q); if (e < d) { d = e; best = q; } }
-      const at = best ? { x: best.x, y: best.y, snapped: true } : style.grid ? gridSnap(p) : p;
+      // onto another shape's point or line, else the grid when it is on
+      const at = snapWith(snaps, p) || (style.grid ? gridSnap(p) : p);
       setHandle(node, h, at, fixed);
       picking.moved = true;
       showSnapMarks([at]);
@@ -1707,7 +2083,7 @@
           break;
         case 'thick': {
           if (isText) break;
-          if (isDot) { n.setAttribute('r', style.thick ? 5 : 3.6); break; }
+          if (isDot) { n.setAttribute('r', DOTS[style.thick]); break; }
           const nw = width();
           st.set('stroke-width', nw);
           const dash = st.get('stroke-dasharray');
@@ -1724,7 +2100,10 @@
         case 'fill': if (!isText && !isDot && closed) setFill(st, style.fill, st.get('stroke') || style.color); break;
       }
       writeStyle(n, st);
-      if (key === 'fill' && style.fill && n.parentNode === content) content.insertBefore(n, items().find(c => !isLocked(c) && c !== n) || null);
+      if (key === 'fill' && style.fill && n.parentNode === content) {
+        if (fillsUnder(st)) content.insertBefore(n, items().find(c => !isLocked(c) && c !== n) || null);
+        else content.appendChild(n); // white or solid: on top, covering what it is drawn over
+      }
     }
 
     function restyleSelection(key) {
@@ -1883,7 +2262,8 @@
       b.onclick = () => {
         const k = b.dataset.style;
         if (k === 'arrow') style.arrow = (style.arrow + 1) % 3;
-        else if (k === 'fill') style.fill = (style.fill + 1) % 3;
+        else if (k === 'fill') style.fill = (style.fill + 1) % 5;
+        else if (k === 'thick') style.thick = (style.thick + 1) % 3;
         else style[k] = !style[k];
         if (k === 'dashed' && style.dashed) style.dotted = false;
         if (k === 'dotted' && style.dotted) style.dashed = false;
@@ -1892,10 +2272,20 @@
       };
     }
     for (const b of document.querySelectorAll('[data-tool]'))
-      b.onclick = () => setTool(tool === b.dataset.tool && b.dataset.tool !== 'pen' ? 'pen' : b.dataset.tool);
+      b.onclick = () => {
+        const t = b.dataset.tool;
+        if (t === 'axes' && tool === 'axes' && !axes3d) { axes3d = true; paintBar(); return; } // again: 3D
+        if (t === 'erase' && tool === 'erase') { // again: the other eraser
+          eraseMode = eraseMode === 'pixel' ? 'object' : 'pixel';
+          try { localStorage.setItem('pad-erase', eraseMode); } catch { }
+          paintBar(); return;
+        }
+        setTool(tool === t && t !== 'pen' ? 'pen' : t);
+      };
 
     function setTool(t) {
       tool = t;
+      axes3d = false;
       for (const k of ['erase', 'text', 'select']) stage.classList.toggle(k, t === k);
       if (t !== 'select') select([]);
       paintBar();
@@ -1912,7 +2302,10 @@
       '<g fill="none" stroke="#1d2027" stroke-width="1.6"><circle cx="11" cy="9" r="7"/><circle cx="19" cy="9" r="7"/></g>',
       '<defs><clipPath id="icon-hatch"><circle cx="15" cy="9" r="7.5"/></clipPath></defs>' +
       '<path clip-path="url(#icon-hatch)" d="M3 13 L13 -1 M7 17 L17 1 M12 19 L22 3 M17 19 L27 5" fill="none" stroke="#1d2027" stroke-width="1.2"/>' +
-      '<circle cx="15" cy="9" r="7.5" fill="none" stroke="#1d2027" stroke-width="1.8"/>'
+      '<circle cx="15" cy="9" r="7.5" fill="none" stroke="#1d2027" stroke-width="1.8"/>',
+      // a white disc covering a line; a solid one
+      '<path d="M2 9 H28" stroke="#1d2027" stroke-width="1.6"/><circle cx="15" cy="9" r="7" fill="#fff" stroke="#1d2027" stroke-width="1.8"/>',
+      '<circle cx="15" cy="9" r="7.5" fill="#1d2027" stroke="#1d2027" stroke-width="1.8"/>'
     ];
     function paintBar() {
       for (const b of document.querySelectorAll('[data-style]')) b.classList.toggle('on', !!style[b.dataset.style]);
@@ -1922,8 +2315,13 @@
       arrow.querySelector('svg').innerHTML = ARROW_ICONS[style.arrow];
       arrow.querySelector('span').textContent = style.arrow === 2 ? 'Both' : 'Arrow';
       const fill = $('[data-style=fill]');
-      fill.querySelector('svg').innerHTML = FILL_ICONS[style.fill === 2 ? 1 : 0];
-      fill.querySelector('span').textContent = style.fill === 2 ? 'Hatch' : 'Fill';
+      fill.querySelector('svg').innerHTML = FILL_ICONS[Math.max(0, style.fill - 1)];
+      fill.querySelector('span').textContent = ['Fill', 'Fill', 'Hatch', 'White', 'Solid'][style.fill];
+      $('[data-tool=axes] span').textContent = axes3d ? '3D axes' : 'Axes';
+      $('[data-tool=erase] span').textContent = eraseMode === 'pixel' ? 'Pixel eraser' : 'Eraser';
+      const thick = $('[data-style=thick]');
+      thick.querySelector('path').setAttribute('stroke-width', [5, 5, 8][style.thick]);
+      thick.querySelector('span').textContent = style.thick === 2 ? 'Heavy' : 'Thick';
     }
 
     // the buttons zoom around the middle of the stage; the percentage goes back to the whole width
